@@ -1,20 +1,35 @@
 from numpy import max as npmax
 
 class Phase:
-    def __init__(self, pNumero, pLignesActives, pDuration):
+    def __init__(self, pNumero, pLignesActives, pDuration, pEscamotable):
         self.numero = pNumero
         self.lignesActives = pLignesActives
-        self.duration = pDuration
+        self.durationNominale = pDuration # Ne change jamais
+        self.duration = pDuration # Peut varier au cours de l'execution
+        self.escamotable = pEscamotable
+        self.solicitee = not pEscamotable # pas solicitee ssi la phase est escamotable
         self.type = 'Phase'
         
+        self.durationMinimale = 10
+        self.durationMaximale = 40
+    
+    def __str__(self):
+        return 'Phase '+str(self.numero)        
+        
+    __repr__ = __str__
+
 class Interphase:
     def __init__(self, pOrigine, pDestination, pTempsChangement, pDuration):
         self.phaseOrigine = pOrigine
         self.phaseDestination = pDestination
-        self.numero = (pOrigine, pDestination)
         self.tempsChangement = pTempsChangement
         self.duration = pDuration
         self.type = 'Interphase'
+        
+    def __str__(self):
+        return 'Interphase '+str((self.phaseOrigine, self.phaseDestination))        
+        
+    __repr__ = __str__
 
 class LigneDeFeu:
     def __init__(self, pNom, pType, pTempsJaune):
@@ -22,20 +37,20 @@ class LigneDeFeu:
         self.type = pType
         self.tempsJaune = pTempsJaune
         self.compteurJaune = 0
-        self.couleur = 'Rouge'
+        self.couleur = 'red'
         
     def changerCouleur(self):
-        if (self.couleur == 'Vert'):
+        if (self.couleur == 'green'):
             if (self.type == 'Voiture'):
-                self.couleur = 'Jaune'
+                self.couleur = 'yellow'
             elif (self.type == 'Pieton'):
-                self.couleur = 'Rouge'
-        elif (self.couleur == 'Rouge'):
-            self.couleur = 'Vert'    
+                self.couleur = 'red'
+        elif (self.couleur == 'red'):
+            self.couleur = 'green'    
 
     def traiterJaune(self):
         if (self.compteurJaune == self.tempsJaune):
-            self.couleur = 'Rouge'
+            self.couleur = 'red'
             self.compteurJaune = 0
         else:
             self.compteurJaune += 1
@@ -48,8 +63,17 @@ class Carrefour:
         
         # Inicialização
         self.matriceInterphase = self.genererInterphases()
-        self.phaseActuelle = self.listePhases[0]
+        self.plan = [phase for phase in self.listePhases if phase.solicitee]
+        self.phaseActuelle = self.plan[0]
         self.tempsPhase = -1 # Para que seja 0 no primeiro ciclo da execuçao
+        
+    def genererInterphases(self):
+        matriceInterphases = [[None for i in self.listePhases] for j in self.listePhases]
+        for i, pi in enumerate(self.listePhases):
+            for j, pj in enumerate(self.listePhases):
+                if (i != j):
+                    matriceInterphases[i][j] = self.calcInterphase(pi,pj)
+        return matriceInterphases
     
     def calcInterphase(self,phase1,phase2):
 
@@ -108,27 +132,23 @@ class Carrefour:
     
         return Interphase(phase1.numero, phase2.numero, tempsChangement, duration)
     
-    def genererInterphases(self):
-        matriceInterphases = [[None for i in self.listePhases] for j in self.listePhases]
-        for i, pi in enumerate(self.listePhases):
-            for j, pj in enumerate(self.listePhases):
-                if (i != j):
-                    matriceInterphases[i][j] = self.calcInterphase(pi,pj)
-        return matriceInterphases
-        
-    
     def update(self):
+        ## Update do plano
+        self.plan = [phase for phase in self.listePhases if phase.solicitee]
+        
         ## Sequencia de fases
         self.tempsPhase += 1
-            
-        if (self.tempsPhase == self.phaseActuelle.duration): # Se chegou no fim da fase
+        transition = (self.tempsPhase == self.phaseActuelle.duration)
+        
+        if (transition): # Se chegou no fim da fase
             
             if (self.phaseActuelle.type == 'Phase'):
-                numeroProchainePhase = self.phaseActuelle.numero + 1
-                if (numeroProchainePhase == len(self.listePhases)):
-                    numeroProchainePhase = 0
+                if self.phaseActuelle.escamotable:
+                    self.phaseActuelle.solicitee = False # Reset de la solicitation
                 
-                self.phaseActuelle = self.matriceInterphase[self.phaseActuelle.numero][numeroProchainePhase]
+                prochainePhase = self.phaseSuivante(self.phaseActuelle)
+                
+                self.phaseActuelle = self.matriceInterphase[self.phaseActuelle.numero][prochainePhase.numero]
                 
             elif (self.phaseActuelle.type == 'Interphase'):
                 numeroProchainePhase = self.phaseActuelle.phaseDestination
@@ -136,29 +156,40 @@ class Carrefour:
                 
             self.tempsPhase = 0
         
-        ## Update cores
+        ## Update couleurs
         if (self.phaseActuelle.type == 'Phase'):
             for i, ligne in enumerate(self.listeLignes):
                 if (self.phaseActuelle.lignesActives[i] == True):
-                    ligne.couleur = 'Vert'
+                    ligne.couleur = 'green'
                 else:
-                    ligne.couleur = 'Rouge'
+                    ligne.couleur = 'red'
             
         elif (self.phaseActuelle.type == 'Interphase'):
             for i, ligne in enumerate(self.listeLignes):
                 if (self.tempsPhase == self.phaseActuelle.tempsChangement[i]):
                     ligne.changerCouleur()
-                if (ligne.couleur == 'Jaune'):
+                if (ligne.couleur == 'yellow'):
                     ligne.traiterJaune()
- 
-        
-    def output(self):
-        print('\033[H\033[J') # clears screen
-        
-        print('Time:', self.tempsPhase)
-        print('Phase:', self.phaseActuelle.numero, end='\n\n')
-        
-        for ligne in self.listeLignes:
-            print(ligne.nom, ligne.couleur)
-        
+                    
+        return ([ligne for ligne in self.listeLignes], transition)
+    
+    def soliciterPhase(self,n):
+        self.listePhases[n].solicitee = True
+#        print('Phase', n, 'solicitee')
+    
+    def nomLignes(self):
+        return [ligne.nom for ligne in self.listeLignes]
+    
+    def phaseSuivante(self, phase):
+        indexPhaseSuivante = self.plan.index(phase) + 1 # index de la phase suivqnte dans le plan
+        if (indexPhaseSuivante == len(self.plan)):
+            indexPhaseSuivante = 0
+        return self.listePhases[self.plan[indexPhaseSuivante].numero]
+    
+    def phasePrecedente(self, phase):
+        indexPhasePrecedente = self.plan.index(phase) + 1 # index de la phase precedente dans le plan
+        if (indexPhasePrecedente < 0):
+            indexPhasePrecedente = len(self.listePhases) - 1
+        return self.listePhases[self.plan[indexPhasePrecedente].numero]
+    
     
