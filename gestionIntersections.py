@@ -1,6 +1,12 @@
 import numpy as np
 import priorite as pri
 
+def suivant(element, liste):
+    index = liste.index(element) + 1
+    if index == len(liste):
+        index = 0
+    return liste[index]
+
 class Phase:
     dureeBus = 3
     dureeMaxBus = 10
@@ -67,15 +73,31 @@ class Carrefour:
         self.matriceSecurite = pMatriceSecurite      
         
         # Inicialização
+        self.matriceGraphe = self.calcGraphe()
         self.matriceInterphase = self.genererInterphases()
         self.cycleBase = [phase for phase in self.listePhases if phase.solicitee]
         self.plan = self.cycleBase
         
         self.phaseActuelle = self.plan[0]
-        self.tempsPhase = 0 # Para que seja 0 no primeiro ciclo da execuçao
+        self.tempsPhase = 0
         
+        self.modePriorite = False
         self.delaiApproche = -1
+    
+    def calcGraphe(self):
+        matrice = np.zeros((len(self.listePhases),len(self.listePhases)))
         
+        for phaseActuelle in self.listePhases:
+            phaseSuivante = suivant(phaseActuelle, self.listePhases)
+            matrice[phaseActuelle.numero][phaseSuivante.numero] = 1
+            
+            if not (phaseActuelle.escamotable and phaseActuelle.prioritaire):
+                while phaseSuivante.escamotable and suivant(phaseSuivante, self.listePhases) != phaseActuelle:
+                    phaseSuivante = suivant(phaseSuivante, self.listePhases)
+                    matrice[phaseActuelle.numero][phaseSuivante.numero] = 1
+                    
+        return matrice
+    
     def genererInterphases(self):
         matriceInterphases = [[None for i in self.listePhases] for j in self.listePhases]
         for i, pi in enumerate(self.listePhases):
@@ -142,20 +164,19 @@ class Carrefour:
         return Interphase(phase1, phase2, tempsChangement, duree)
     
     def update(self):
-       
-            
         ## Update do plano
         self.cycleBase = [phase for phase in self.listePhases if phase.solicitee]
-        if self.delaiApproche < 0: # pas de vehicule qui s'approche
-            self.plan = self.cycleBase
-            for phase in self.listePhases:
-                phase.duree = phase.dureeNominale
-        else:
+        
+        if self.delaiApproche >= 0:
+            self.modePriorite = True
             self.plan = self.planPriorite()
         
-        transition = (self.tempsPhase >= self.phaseActuelle.duree)
-        if transition: # Se chegou no fim da fase/interfase
-            self.transition()
+        if not self.modePriorite:
+            self.plan = self.planStandard()
+        
+        transition = False
+        if self.tempsPhase >= self.phaseActuelle.duree: # Se chegou no fim da fase/interfase
+            transition = self.transition() # Falso se passar de uma fase pra ela mesma
             
         self.updateCouleurs()
         
@@ -171,21 +192,29 @@ class Carrefour:
             if self.phaseActuelle.escamotable:
                 self.phaseActuelle.solicitee = False # Reset de la solicitation
             
+            if self.delaiApproche < 0 and self.phaseActuelle.prioritaire:
+                self.modePriorite = False
+                self.plan = self.planStandard()
+            
             if self.phaseActuelle in self.plan:
-                prochainePhase = self.phaseSuivante(self.phaseActuelle, self.plan)
+                prochainePhase = suivant(self.phaseActuelle, self.plan)
             elif self.phaseActuelle in self.cycleBase:
-                prochainePhase = self.phaseSuivante(self.phaseActuelle, self.cycleBase)
+                prochainePhase = suivant(self.phaseActuelle, self.cycleBase)
             else:
-                prochainePhase = self.phaseSuivante(self.phaseActuelle, self.listePhases)
+                prochainePhase = suivant(self.phaseActuelle, self.listePhases)
             
+            if self.phaseActuelle == prochainePhase:
+                return False
             
-            self.phaseActuelle = self.matriceInterphase[self.phaseActuelle.numero][prochainePhase.numero]
-            
+            self.phaseActuelle = self.matriceInterphase[self.phaseActuelle.numero][prochainePhase.numero]   
+                
         elif (self.phaseActuelle.type == 'Interphase'):
-            numeroProchainePhase = self.phaseActuelle.phaseDestination.numero
-            self.phaseActuelle = self.listePhases[numeroProchainePhase]
-            
+            self.phaseActuelle = self.phaseActuelle.phaseDestination
+        
         self.tempsPhase = 0
+        
+        return True
+        
     
     def updateCouleurs(self):
         if (self.phaseActuelle.type == 'Phase'):
@@ -202,34 +231,26 @@ class Carrefour:
                 if (ligne.couleur == 'yellow'):
                     ligne.traiterJaune()
     
+    def planStandard(self):
+        for phase in self.listePhases:
+            phase.duree = phase.dureeNominale
+        return self.cycleBase
+    
     def planPriorite(self):
-        chemin = pri.meilleurChemin(self, self.delaiApproche)
+        chemin = pri.meilleurChemin(self)
         durees = chemin.dureesIdeales(self.delaiApproche)
+        plan = chemin.getPlan(durees)
         
         print('Bus arrive en', self.delaiApproche)
         print(chemin)
         print(durees, end='\n\n')
         
-        return chemin.getPlan(durees)
-    
-#        return self.cycleBase
-    
+        return plan
+        
     def soliciterPhase(self,n):
         self.listePhases[n].solicitee = True
     
     def nomLignes(self):
         return [ligne.nom for ligne in self.listeLignes]
-    
-    def phaseSuivante(self, phase, liste):
-        indexPhaseSuivante = liste.index(phase) + 1
-        if (indexPhaseSuivante == len(liste)):
-            indexPhaseSuivante = 0
-        return liste[indexPhaseSuivante]
-    
-    def phasePrecedente(self, phase, liste):
-        indexPhasePrecedente = liste.index(phase) - 1
-        if (indexPhasePrecedente < 0):
-            indexPhasePrecedente = len(liste) - 1
-        return liste[indexPhasePrecedente]
     
     
