@@ -32,10 +32,10 @@ ligne3 = gi.LigneDeFeu('P3', 'Pieton', 0)
 ligne4 = gi.LigneDeFeu('B4', 'Voiture', 3)
 listeLignes = [ligne0, ligne1, ligne2, ligne3, ligne4]
 
-phase0 = gi.Phase(0, [True, True, False, False, False], 15, False)
-phase1 = gi.Phase(1, [False, False, False, True, True], 8, True)
-phase2 = gi.Phase(2, [False, False, True, True, False], 15, False)
-phase3 = gi.Phase(3, [False, True, False, False, True], 8, True)
+phase0 = gi.Phase(0, [True, True, False, False, False], 12, 25, 50, False, False)
+phase1 = gi.Phase(1, [False, False, False, True, True], 6, 10, 20, True, True)
+phase2 = gi.Phase(2, [False, False, True, True, False], 10, 18, 35, False, False)
+phase3 = gi.Phase(3, [False, True, False, False, True], 6, 10, 20, True, True)
 listePhases = [phase0, phase1, phase2, phase3]
 
 matriceSecurite = [[0, 0, 2, 1, 2],
@@ -46,17 +46,9 @@ matriceSecurite = [[0, 0, 2, 1, 2],
 
 carrefour = gi.Carrefour(listeLignes, listePhases, matriceSecurite)
 
-#for ligne in carrefour.matriceInterphase:
-#    for elem in ligne:
-#        if (elem != None):
-#            print(elem.duration, end=' ')
-#        else:
-#            print('-', end=' ')
-#    print('')
-    
+#print(carrefour.matriceInterphase[2][3].duree)
 
 # Criação da interface grafica
-
 mainWindow = tk.Tk()
 mainWindow.title("Simulateur de Carrefour")
 app = gc.AppIntersection(mainWindow, carrefour)
