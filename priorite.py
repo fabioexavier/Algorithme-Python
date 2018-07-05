@@ -6,6 +6,16 @@ def suivant(element, liste):
         index = 0
     return liste[index]
 
+def zoneMorte(x, gap):
+    if gap < 0:
+        gap = 0
+    if x <= -gap:
+        return x + gap
+    elif x <= gap:
+        return 0
+    else:
+        return x - gap
+
 
 class Chemin:
     def __init__(self, pOrigine, pCarrefour, pListePhases, pSommeMin=0, pSommeNom=0, pSommeMax=0):
@@ -38,36 +48,35 @@ class Chemin:
     
     def deviation(self, delaiApproche):
         deviationTotale = delaiApproche - self.delaiNominal()
-        if deviationTotale == 0:
-            return 0
-        else:
-            n = len(self)
-            if self.listePhases[-1].escamotable or deviationTotale < 0:
-                n -= 1
-            if deviationTotale < 0 and self.origine.type == 'Phase':
-                if self.carrefour.tempsPhase >= self.origine.dureeMinimale:
-                    n -= 1
-#            return abs(deviationTotale)/n
-            return abs(deviationTotale)
+        return abs(deviationTotale)
     
     def dureesIdeales(self, delaiApproche):
-        deltaTotal =  delaiApproche - self.delaiNominal()    
+        if self.listePhases[-1].exclusive:
+            instantOuverture = 0
+        else:
+            instantOuverture = (self.listePhases[-1].dureeNominale - self.listePhases[-1].dureeBus)//2
+                
+        # deltaTotal é o quanto se tem que aumentar a duraçao do caminho em relacao ao que se faria no modo sem prioridade
+        deltaTotal =  zoneMorte(delaiApproche - self.delaiNominal(), instantOuverture - (self.listePhases[-1].dureeMaxBus - self.listePhases[-1].dureeBus))
         
         minDurees = [phase.dureeMinimale for phase in self.listePhases]
         if self.carrefour.phaseActuelle.type == 'Phase' and self.carrefour.tempsPhase > minDurees[0]:
             minDurees[0] = self.carrefour.tempsPhase
             
         nomDurees = [phase.dureeNominale for phase in self.listePhases]
-        if self.carrefour.phaseActuelle.type == 'Phase' and self.carrefour.tempsPhase > nomDurees[0]:
-            nomDurees[0] = self.carrefour.tempsPhase
-            
+                    
         maxDurees = [phase.dureeMaximale for phase in self.listePhases]
         
         minDurees[-1] = nomDurees[-1] # Nao permite encolher a ultima fase nunca
-#        if self.phaseDestination.escamotable:
-        maxDurees[-1] = nomDurees[-1] # Nao permite aumentar a ultima fase se for escamotavel
+        if self.listePhases[-1].exclusive:
+            maxDurees[-1] = nomDurees[-1] # Nao permite aumentar a ultima fase se for exclusiva
         
         durees = nomDurees.copy()
+        # Caso ja tenha ultrapassado o nominal da fase
+        if self.carrefour.phaseActuelle.type == 'Phase' and self.carrefour.tempsPhase > nomDurees[0]:
+            if len(self) > 1: # Nao faz a correçao se ja estiver na ultima fase
+                durees[0] = self.carrefour.tempsPhase
+        
         if (deltaTotal > 0):
             for i in range(deltaTotal):
                 rapports = [nominal/(duree+1) if duree < maximal else 0 \
@@ -100,19 +109,27 @@ class Chemin:
             return self.sommeMin - self.listePhases[-1].dureeMinimale
     
     def delaiNominal(self):
+        if self.listePhases[-1].exclusive:
+            instantOuverture = 0
+        else:
+            instantOuverture = (self.listePhases[-1].dureeNominale - self.listePhases[-1].dureeBus)//2
+                
         # Caso especial de ja começar na fase final
         if self.origine.type == 'Phase' and len(self) == 1:
-            return self.origine.dureeNominale - self.carrefour.tempsPhase # Pode ser negativo
+            return instantOuverture - self.carrefour.tempsPhase
+        
         else:
-            return self.sommeNom - self.listePhases[-1].dureeNominale
+            return self.sommeNom - (self.listePhases[-1].dureeNominale - instantOuverture)
     
     def delaiMaximal(self):
+        instantOuverture = self.listePhases[-1].dureeMaximale - self.listePhases[-1].dureeMaxBus
+        
         # Caso especial de ja começar na fase final
         if self.origine.type == 'Phase' and len(self) == 1:
-            return self.origine.dureeMaximale - self.carrefour.tempsPhase if self.origine.dureeMaximale - self.carrefour.tempsPhase > 0 else 0
+            return instantOuverture - self.carrefour.tempsPhase if instantOuverture - self.carrefour.tempsPhase > 0 else 0
         else:
-            return self.sommeMax - self.listePhases[-1].dureeMaximale
-    
+            return self.sommeMax - self.listePhases[-1].dureeMaxBus
+            
     def copy(self):
         return Chemin(self.origine, self.carrefour, self.listePhases.copy(), self.sommeMin, self.sommeNom, self.sommeMax)
     
@@ -139,13 +156,17 @@ class Graphe:
         cheminBase = Chemin(origine, carrefour, [])
         if origine.type == 'Interphase':
             origine = origine.phaseDestination
-        self.rechercheChemins(origine, destination, cheminBase, delaiApproche)
+        
+        if origine in self.listeSommets:
+            self.rechercheChemins(origine, destination, cheminBase, delaiApproche)
         chemins = self.listeChemins
         self.listeChemins = []
+        
         return chemins
 
     def rechercheChemins(self, origine, destination, chemin, delaiApproche):
         chemin.append(origine)
+#        print(origine, chemin.sommeMax, chemin.delaiMaximal())
         continuer = False
         
         if origine == destination:
@@ -169,17 +190,17 @@ def meilleurChemin(carrefour):
     
     listePhasesPrioritaires = [phase for phase in carrefour.listePhases if phase.prioritaire]
     for phasePrioritaire in listePhasesPrioritaires:
-        phaseInterdite = phasePrioritaire.escamotable and not suivant(phasePrioritaire, carrefour.listePhases) in carrefour.cycleBase
+#        phaseInterdite = SE FOR EXCLUSIVA E NENHUMA DAS POSSIVEIS FASES SEGUINTES SOLICITADAS
+        phaseInterdite = False
         if not phaseInterdite:
             sommets = [phase for phase in carrefour.listePhases if phase in carrefour.cycleBase or phase == phasePrioritaire]
+#            print(sommets)
             numeroSommets = [sommet.numero for sommet in sommets]
-            carrefour.matriceSubgraphe = carrefour.matriceGraphe[numeroSommets,:][:, numeroSommets]
-            subgraphe = Graphe(carrefour.matriceSubgraphe, sommets)
+            matriceSubgraphe = carrefour.matriceGraphe[numeroSommets,:][:, numeroSommets]
+#            print(matriceSubgraphe)
+            subgraphe = Graphe(matriceSubgraphe, sommets)
             
-            try:
-                listeChemins += subgraphe.chemins(carrefour.phaseActuelle, phasePrioritaire, carrefour, carrefour.delaiApproche)
-            except ValueError:
-                pass # Caso a fase atual nao pertença ao subgrafo (ex: 2 fases prioritarias escamotaveis)
+            listeChemins += subgraphe.chemins(carrefour.phaseActuelle, phasePrioritaire, carrefour, carrefour.delaiApproche)
             
     cheminsPossibles = []
     cheminsLongs = []

@@ -9,9 +9,9 @@ def suivant(element, liste):
 
 class Phase:
     dureeBus = 3
-    dureeMaxBus = 10
+    dureeMaxBus = 6
     
-    def __init__(self, pNumero, pLignesActives, pMin, pNom, pMax, pEscamotable, pPrioritaire):
+    def __init__(self, pNumero, pLignesActives, pMin, pNom, pMax, pEscamotable, pPrioritaire, pExclusive):
         self.numero = pNumero
         self.lignesActives = pLignesActives
         
@@ -23,6 +23,7 @@ class Phase:
         self.escamotable = pEscamotable
         self.solicitee = not pEscamotable # pas solicitee ssi la phase est escamotable
         self.prioritaire = pPrioritaire
+        self.exclusive = pExclusive
         self.type = 'Phase'
     
     
@@ -91,10 +92,10 @@ class Carrefour:
             phaseSuivante = suivant(phaseActuelle, self.listePhases)
             matrice[phaseActuelle.numero][phaseSuivante.numero] = 1
             
-            if not (phaseActuelle.escamotable and phaseActuelle.prioritaire):
-                while phaseSuivante.escamotable and suivant(phaseSuivante, self.listePhases) != phaseActuelle:
-                    phaseSuivante = suivant(phaseSuivante, self.listePhases)
-                    matrice[phaseActuelle.numero][phaseSuivante.numero] = 1
+#            if not phaseActuelle.exclusive:
+            while phaseSuivante.escamotable and suivant(phaseSuivante, self.listePhases) != phaseActuelle:
+                phaseSuivante = suivant(phaseSuivante, self.listePhases)
+                matrice[phaseActuelle.numero][phaseSuivante.numero] = 1
                     
         return matrice
     
@@ -107,7 +108,6 @@ class Carrefour:
         return matriceInterphases
     
     def calcInterphase(self,phase1,phase2):
-
         # Ver quais linhas abrem e quais fecham   
         fermer = []
         ouvrir = []
@@ -117,8 +117,19 @@ class Carrefour:
                 fermer.append(i)
             elif ((phase1.lignesActives[i] == False) and  (phase2.lignesActives[i] == True)):
                 ouvrir.append(i)
-                
-        # Calcuar matriz especifica
+        
+        # Se nenhuma fechar, nao existe interfase
+        if not fermer:
+            return Interphase(phase1, phase2, [None for i in self.listeLignes], 0)
+        
+        # Se alguma fechar mas nenuma abrir, fazer a interfase apenas para dar os amarelos
+        if not ouvrir:
+            duree = max([ligne.tempsJaune for i,ligne in enumerate(self.listeLignes) if i in fermer])
+            tempsChangement = [0 if i in fermer else None for i in range(len(self.listeLignes))]
+            return Interphase(phase1, phase2, tempsChangement, duree)
+        
+        
+        # Calcular matriz especifica
         matriceReduite = [[None for i in ouvrir] for j in fermer]
         for i,x in enumerate(fermer):
             for j,y in enumerate(ouvrir):
@@ -129,7 +140,6 @@ class Carrefour:
                 if (self.listeLignes[x].type == 'Voiture'): 
                     matriceReduite[i][j] += self.listeLignes[x].tempsJaune
                  
-            
         duree = np.max(matriceReduite) # A duração da interfase é o maior dos valores dessa matriz
         
         # Inicialização do vetor com 0 para as linhas que fecham e 'duree' pras linhas que abrem (e None pras que não são envolvidas)
@@ -207,7 +217,9 @@ class Carrefour:
                 return False
             
             self.phaseActuelle = self.matriceInterphase[self.phaseActuelle.numero][prochainePhase.numero]   
-                
+            if self.phaseActuelle.duree == 0:
+                self.phaseActuelle = self.phaseActuelle.phaseDestination
+            
         elif (self.phaseActuelle.type == 'Interphase'):
             self.phaseActuelle = self.phaseActuelle.phaseDestination
         
