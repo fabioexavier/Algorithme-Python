@@ -44,11 +44,18 @@ class Interphase:
     __repr__ = __str__
 
 class LigneDeFeu:
-    def __init__(self, pNom, pType, pTempsJaune):
+    def __init__(self, pNumero, pNom, pType, pTempsJaune, pPrioritaire):
+        self.numero = pNumero
         self.nom = pNom
         self.type = pType
         self.tempsJaune = pTempsJaune
         self.compteurJaune = 0
+        self.prioritaire = pPrioritaire
+        
+        self.compteurRouge = 0
+        self.phaseAssociee = None # Fase escamotavel ligada a essa linha
+        self.solicitee = not self.prioritaire
+        
         self.couleur = 'red'
         
     def changerCouleur(self):
@@ -71,9 +78,17 @@ class Carrefour:
     def __init__(self, pListeLignes, pListePhases, pMatriceSecurite):
         self.listeLignes = pListeLignes
         self.listePhases = pListePhases
-        self.matriceSecurite = pMatriceSecurite      
+        self.matriceSecurite = np.array(pMatriceSecurite)
         
-        # Inicialização
+        # Identificaçao das linhas escamotaveis (dentre as nao prioritarias)
+        for ligne in self.listeLignes:
+            if not ligne.prioritaire:
+                phases = [phase for phase in self.listePhases if phase.lignesActives[ligne.numero] == True]
+                if len(phases) == 1:
+                    if phases[0].escamotable:
+                        ligne.phaseAssociee = phases[0]
+                        ligne.solicitee = False
+            
         self.matriceGraphe = self.calcGraphe()
         self.matriceInterphase = self.genererInterphases()
         self.cycleBase = [phase for phase in self.listePhases if phase.solicitee]
@@ -84,7 +99,7 @@ class Carrefour:
         
         self.modePriorite = False
         self.delaiApproche = -1
-    
+        
     def calcGraphe(self):
         matrice = np.zeros((len(self.listePhases),len(self.listePhases)))
         
@@ -92,7 +107,6 @@ class Carrefour:
             phaseSuivante = suivant(phaseActuelle, self.listePhases)
             matrice[phaseActuelle.numero][phaseSuivante.numero] = 1
             
-#            if not phaseActuelle.exclusive:
             while phaseSuivante.escamotable and suivant(phaseSuivante, self.listePhases) != phaseActuelle:
                 phaseSuivante = suivant(phaseSuivante, self.listePhases)
                 matrice[phaseActuelle.numero][phaseSuivante.numero] = 1
@@ -112,11 +126,11 @@ class Carrefour:
         fermer = []
         ouvrir = []
         
-        for i in range(len(self.listeLignes)):
-            if ((phase1.lignesActives[i] == True) and  (phase2.lignesActives[i] == False)):
-                fermer.append(i)
-            elif ((phase1.lignesActives[i] == False) and  (phase2.lignesActives[i] == True)):
-                ouvrir.append(i)
+        for ligne in self.listeLignes:
+            if phase1.lignesActives[ligne.numero] and not phase2.lignesActives[ligne.numero]:
+                fermer.append(ligne)
+            elif not phase1.lignesActives[ligne.numero] and phase2.lignesActives[ligne.numero]:
+                ouvrir.append(ligne)
         
         # Se nenhuma fechar, nao existe interfase
         if not fermer:
@@ -124,53 +138,29 @@ class Carrefour:
         
         # Se alguma fechar mas nenuma abrir, fazer a interfase apenas para dar os amarelos
         if not ouvrir:
-            duree = max([ligne.tempsJaune for i,ligne in enumerate(self.listeLignes) if i in fermer])
-            tempsChangement = [0 if i in fermer else None for i in range(len(self.listeLignes))]
+            duree = max([ligne.tempsJaune for ligne in self.listeLignes if ligne in fermer])
+            tempsChangement = [0 if ligne in fermer else None for ligne in self.listeLignes]
             return Interphase(phase1, phase2, tempsChangement, duree)
         
         
         # Calcular matriz especifica
-        matriceReduite = [[None for i in ouvrir] for j in fermer]
-        for i,x in enumerate(fermer):
-            for j,y in enumerate(ouvrir):
-                # Slice da matriz de segurança nas linhas que fecham e colunas que abrem
-                matriceReduite[i][j] = self.matriceSecurite[x][y] 
+        indexesOuvrir = [ligne.numero for ligne in ouvrir]
+        indexesFermer = [ligne.numero for ligne in fermer]
+        matriceReduite = self.matriceSecurite.copy()[indexesFermer,:][:,indexesOuvrir]
+        for i,ligne in enumerate(fermer):
+            matriceReduite[i,:] += ligne.tempsJaune
         
-                # Adiciona tempo de amarelo pras linhas de carro que fecham
-                if (self.listeLignes[x].type == 'Voiture'): 
-                    matriceReduite[i][j] += self.listeLignes[x].tempsJaune
-                 
         duree = np.max(matriceReduite) # A duração da interfase é o maior dos valores dessa matriz
         
-        # Inicialização do vetor com 0 para as linhas que fecham e 'duree' pras linhas que abrem (e None pras que não são envolvidas)
+        # Calculo dos instantes em que as linhas abrem/fecham
         tempsChangement = [None for i in self.listeLignes]
         
-        for i,ligne in enumerate(self.listeLignes): 
-            if i in fermer:
-                tempsChangement[i] = 0
-            elif i in ouvrir:
-                tempsChangement[i] = duree
-                
-        # Calcular todos os tempos otimizados 
-        for ligne in range(len(self.listeLignes)):
-            if (ligne in fermer):
-                i = fermer.index(ligne)
-                temp = [None]*len(ouvrir)
-                
-                for j,y in enumerate(ouvrir):
-                    temp[j] = tempsChangement[y] - matriceReduite[i][j]
-                
-                tempsChangement[ligne] = min(temp)
-                
-            elif (ligne in ouvrir):
-                j = ouvrir.index(ligne)
-                temp = [None]*len(fermer)
-                
-                for i,x in enumerate(fermer):
-                    temp[i] = tempsChangement[x] + matriceReduite[i][j]
-                
-                tempsChangement[ligne] = max(temp)
-    
+        for j,ligneO in enumerate(ouvrir):
+            tempsChangement[ligneO.numero] = max(matriceReduite[:,j])
+        
+        for i,ligneF in enumerate(fermer):
+            tempsChangement[ligneF.numero] = min([tempsChangement[ligneO.numero] - matriceReduite[i,j] for j,ligneO in enumerate(ouvrir)])
+        
         return Interphase(phase1, phase2, tempsChangement, duree)
     
     def update(self):
@@ -189,6 +179,7 @@ class Carrefour:
             transition = self.transition() # Falso se passar de uma fase pra ela mesma
             
         self.updateCouleurs()
+        self.updateCompteursRouge()
         
          # Atualiza contadores
         self.tempsPhase += 1
@@ -208,10 +199,10 @@ class Carrefour:
             
             if self.phaseActuelle in self.plan:
                 prochainePhase = suivant(self.phaseActuelle, self.plan)
-            elif self.phaseActuelle in self.cycleBase:
-                prochainePhase = suivant(self.phaseActuelle, self.cycleBase)
             else:
                 prochainePhase = suivant(self.phaseActuelle, self.listePhases)
+                while not prochainePhase.solicitee:
+                    prochainePhase = suivant(prochainePhase, self.listePhases)
             
             if self.phaseActuelle == prochainePhase:
                 return False
@@ -235,6 +226,7 @@ class Carrefour:
                     ligne.couleur = 'green'
                 else:
                     ligne.couleur = 'red'
+                    ligne.compteurJaune = 0
             
         elif (self.phaseActuelle.type == 'Interphase'):
             for i, ligne in enumerate(self.listeLignes):
@@ -242,6 +234,23 @@ class Carrefour:
                     ligne.changerCouleur()
                 if (ligne.couleur == 'yellow'):
                     ligne.traiterJaune()
+    
+    def updateCompteursRouge(self):
+        for ligne in self.listeLignes:
+            if ligne.phaseAssociee: # Se houver uma fases associada aka a linha for escamotavel (mas nao prioritaria)
+                ligne.solicitee = ligne.phaseAssociee.solicitee  
+                
+            elif ligne.prioritaire:
+                if self.delaiApproche == 0:
+                    ligne.solicitee = True
+                elif ligne.couleur == 'green':
+                    ligne.solicitee = False            
+            
+            if ligne.couleur == 'red' and ligne.solicitee:
+                ligne.compteurRouge += 1
+                
+            elif ligne.couleur == 'green':
+                ligne.compteurRouge = 0
     
     def planStandard(self):
         for phase in self.listePhases:
