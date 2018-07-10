@@ -53,8 +53,8 @@ class LigneDeFeu:
         self.prioritaire = pPrioritaire
         
         self.compteurRouge = 0
-        self.phaseAssociee = None # Fase escamotavel ligada a essa linha
-        self.solicitee = not self.prioritaire
+        self.phasesAssociees = [] # Fases escamotaveis ligadas a essa linha
+        self.solicitee = not self.prioritaire # Linhas prioritarias inicializam nao solicitadas (falta desativar solicitacao das linhas escamotaveis)
         
         self.couleur = 'red'
         
@@ -84,11 +84,11 @@ class Carrefour:
         for ligne in self.listeLignes:
             if not ligne.prioritaire:
                 phases = [phase for phase in self.listePhases if phase.lignesActives[ligne.numero] == True]
-                if len(phases) == 1:
-                    if phases[0].escamotable:
-                        ligne.phaseAssociee = phases[0]
-                        ligne.solicitee = False
-            
+                if all(phase.escamotable for phase in phases):
+                    ligne.phasesAssociees = [phase for phase in phases if not phase.prioritaire]
+                    ligne.solicitee = False
+#                    print(ligne.nom, ligne.phasesAssociees)
+                
         self.matriceGraphe = self.calcGraphe()
         self.matriceInterphase = self.genererInterphases()
         self.cycleBase = [phase for phase in self.listePhases if phase.solicitee]
@@ -237,8 +237,8 @@ class Carrefour:
     
     def updateCompteursRouge(self):
         for ligne in self.listeLignes:
-            if ligne.phaseAssociee: # Se houver uma fases associada aka a linha for escamotavel (mas nao prioritaria)
-                ligne.solicitee = ligne.phaseAssociee.solicitee  
+            if ligne.phasesAssociees: # Se a linha for escamotavel
+                ligne.solicitee = any(phase.solicitee for phase in ligne.phasesAssociees)
                 
             elif ligne.prioritaire:
                 if self.delaiApproche == 0:
@@ -258,13 +258,13 @@ class Carrefour:
         return self.cycleBase
     
     def planPriorite(self):
+        print('Bus arrive en', self.delaiApproche, end='\n\n')
         chemin = pri.meilleurChemin(self)
-        durees = chemin.dureesIdeales(self.delaiApproche)
-        plan = chemin.getPlan(durees)
+        plan = chemin.getPlan()
         
-        print('Bus arrive en', self.delaiApproche)
+        print('Chemin choisi')
         print(chemin)
-        print(durees, end='\n\n')
+        print('\n\n')
         
         return plan
         
