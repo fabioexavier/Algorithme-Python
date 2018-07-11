@@ -258,7 +258,7 @@ class Carrefour:
         return self.cycleBase
     
     def planPriorite(self):
-        print('Bus arrive en', self.delaiApproche, end='\n\n')
+        print('Bus arrive dans', self.delaiApproche, end='\n\n')
         chemin = pri.meilleurChemin(self)
         plan = chemin.getPlan()
         

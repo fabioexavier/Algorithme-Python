@@ -206,21 +206,34 @@ class Graphe:
 
     def rechercheChemins(self, origine, destination, chemin, delaiApproche):
         chemin.append(origine)
-#        print(origine, chemin.sommeMax, chemin.delaiMaximal())
-        continuer = False
+        arreter = False
+#        continuer = False
         
-        if origine == destination:
+        if origine == destination: # PROBLEMA: E SE COMECAR NA FASE DESTINO????
             self.listeChemins.append(chemin)
-            if not destination.escamotable:
-                continuer = True
-        else:
+#            if not destination.escamotable:
+#                continuer = True
+#        else:
             # phaseInterdite significa que ela é escamotavel e ja esta no caminho, e assim nao faz sentido adicionar de novo
             # OBS: FALTA TRATAR POSSIBILIDADE DE REPETIR DUAS VEZES A MESMA FASE ESCAMOTAVEL CASO SEJA PENE
-            phaseInterdite = origine.escamotable and origine in chemin.listePhases[:-1]
-            if (delaiApproche > chemin.sommeMin or len(chemin) < len(self.listeSommets)) and not phaseInterdite:
-                continuer = True
+#            phaseInterdite = origine.escamotable and origine in chemin.listePhases[:-1]
+#            if (delaiApproche > chemin.sommeMin or len(chemin) < len(self.listeSommets)) and not phaseInterdite:
+#                continuer = True
         
-        if continuer:
+#        if continuer:
+            
+        # Condiçoes de parada    
+        if origine.escamotable:
+            if origine.prioritaire and origine.exclusive: # PEE
+                if len(chemin) > 1:
+                    arreter = True
+            else: # PENE ou ESC
+                if origine in self.listeChemins[:-1]: # Ja adicionada
+                    arreter = True
+        elif chemin.sommeMin >= delaiApproche and len(chemin) >= len(self.listeSommets):
+            arreter = True
+        
+        if not arreter:
             i = self.listeSommets.index(origine)
             enfants = [sommet for j,sommet in enumerate(self.listeSommets) if self.matrice[i,j] == 1]
             for sommet in enfants:
@@ -249,9 +262,11 @@ def meilleurChemin(carrefour):
     for chemin in listeChemins:
         if carrefour.delaiApproche <= chemin.delaiMaximal():
             if carrefour.delaiApproche >= chemin.delaiMinimal():
-                cheminsPossibles.append(chemin)
+                if chemin.tempsRouge() < 120:
+                    cheminsPossibles.append(chemin)
             else:
-                cheminsLongs.append(chemin)
+                if chemin.tempsRouge() < 120:
+                    cheminsLongs.append(chemin)
             
     if cheminsPossibles: # Se nao estiver vazia
         deviations = [chemin.deviation() for chemin in cheminsPossibles]
