@@ -264,7 +264,7 @@ class Carrefour:
         
         print('Chemin choisi')
         print(chemin)
-        print('\n\n')
+        print('\n')
         
         return plan
         

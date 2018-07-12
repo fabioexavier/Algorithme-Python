@@ -6,6 +6,12 @@ def suivant(element, liste):
         index = 0
     return liste[index]
 
+def precedent(element, liste):
+    index = liste.index(element) - 1
+    if index < 0:
+        index = len(liste) - 1
+    return liste[index]
+
 def zoneMorte(x, gap):
     if gap < 0:
         gap = 0
@@ -132,29 +138,37 @@ class Chemin:
         tempsRouge = [ligne.compteurRouge for ligne in self.carrefour.listeLignes]
         
         for ligne in self.carrefour.listeLignes:
+            # Somente trata as linhas fechadas
             if ligne.compteurRouge > 0:
+                # Inicialização para distinguir se começa em fase ou em interfase
                 if self.origine.type == 'Phase':
                     tempsRouge[ligne.numero] -= self.carrefour.tempsPhase
                 elif self.origine.type == 'Interphase':
                     tempsRouge[ligne.numero] += self.origine.duree - self.carrefour.tempsPhase
-                    
-                finished = False
+                
+                # Acumula os tempos de vermelho durante a execução do plano
                 for phase1, phase2, duree in zip(self.listePhases, self.listePhases[1:], self.durees()):
                     if phase1.lignesActives[ligne.numero] == True:
-                        finished = True
                         break
+                    
                     tempsRouge[ligne.numero] += duree
                     tempsRouge[ligne.numero] += self.carrefour.matriceInterphase[phase1.numero][phase2.numero].duree
-                    
-                if not finished:
+                
+                # Acumula os tempos de vermelho durante as fases do ciclo base caso a linha não tenha aberto durante a execução do plano
+                else:
                     phase1 = self.listePhases[-1]
                     while not phase1.lignesActives[ligne.numero]:
                         phase2 = suivant(phase1, self.carrefour.listePhases)
                         while not phase2.solicitee:
                             phase2 = suivant(phase2, self.carrefour.listePhases)
+                            
                         tempsRouge[ligne.numero] += phase1.dureeNominale
                         tempsRouge[ligne.numero] += self.carrefour.matriceInterphase[phase1.numero][phase2.numero].duree
+                        
                         phase1 = phase2
+#                # Desconta os segundos de verde da interfase
+#                tempsRouge[ligne.numero] -= (self.carrefour.matriceInterphase[phase1.numero][phase2.numero].duree\
+#                          - self.carrefour.matriceInterphase[phase1.numero][phase2.numero].tempsChangement[ligne.numero])
         
         return max(tempsRouge)
     
@@ -207,20 +221,9 @@ class Graphe:
     def rechercheChemins(self, origine, destination, chemin, delaiApproche):
         chemin.append(origine)
         arreter = False
-#        continuer = False
         
-        if origine == destination: # PROBLEMA: E SE COMECAR NA FASE DESTINO????
+        if origine == destination:
             self.listeChemins.append(chemin)
-#            if not destination.escamotable:
-#                continuer = True
-#        else:
-            # phaseInterdite significa que ela é escamotavel e ja esta no caminho, e assim nao faz sentido adicionar de novo
-            # OBS: FALTA TRATAR POSSIBILIDADE DE REPETIR DUAS VEZES A MESMA FASE ESCAMOTAVEL CASO SEJA PENE
-#            phaseInterdite = origine.escamotable and origine in chemin.listePhases[:-1]
-#            if (delaiApproche > chemin.sommeMin or len(chemin) < len(self.listeSommets)) and not phaseInterdite:
-#                continuer = True
-        
-#        if continuer:
             
         # Condiçoes de parada    
         if origine.escamotable:
@@ -228,9 +231,9 @@ class Graphe:
                 if len(chemin) > 1:
                     arreter = True
             else: # PENE ou ESC
-                if origine in self.listeChemins[:-1]: # Ja adicionada
+                if origine in self.listeChemins[:-1]: # Ja adicionada antes
                     arreter = True
-        elif chemin.sommeMin >= delaiApproche and len(chemin) >= len(self.listeSommets):
+        elif chemin.sommeMin >= delaiApproche and len(chemin) >= len(self.listeSommets): # Caminho muito longo sem chegar no destino
             arreter = True
         
         if not arreter:
@@ -248,7 +251,8 @@ def meilleurChemin(carrefour):
         i = carrefour.listePhases.index(phasePrioritaire)
         destinations = [phase for j,phase in enumerate(carrefour.listePhases) if carrefour.matriceGraphe[i,j] == 1]
         
-        if any(phase.solicitee for phase in destinations): # Se pelo menos uma das possiveis fases destino for solicitada
+        # Se pelo menos uma das possiveis fases destino for solicitada
+        if any(phase.solicitee for phase in destinations):
             sommets = [phase for phase in carrefour.listePhases if phase in carrefour.cycleBase or phase == phasePrioritaire]
             numeroSommets = [sommet.numero for sommet in sommets]
             matriceSubgraphe = carrefour.matriceGraphe[numeroSommets,:][:, numeroSommets]
@@ -269,10 +273,25 @@ def meilleurChemin(carrefour):
                     cheminsLongs.append(chemin)
             
     if cheminsPossibles: # Se nao estiver vazia
-        deviations = [chemin.deviation() for chemin in cheminsPossibles]
-#        tempsRouge = [chemin.tempsRouge()  for chemin in cheminsPossibles]
+#        deviations = [chemin.deviation() for chemin in cheminsPossibles]
+#        meilleurChemin = cheminsPossibles[np.argmin(deviations)]
         
-        meilleurChemin = cheminsPossibles[np.argmin(deviations)]
+        # Maximo de atraso toleravel para que o caminho continue valido
+        retardsMaximals = [min([chemin.delaiMaximal()-carrefour.delaiApproche, 120-chemin.tempsRouge()]) for chemin in cheminsPossibles]
+        
+        # Maior atraso toleravel entre todos os caminhosm com saturação em 15s
+        couvertureMaximale = min([max(retardsMaximals), 15])
+        
+        # Lista dos caminhos que cobrem ao máximo intervalo de 15s
+        cheminsRobustes = [chemin for chemin,retard in zip(cheminsPossibles,retardsMaximals) if retard >= couvertureMaximale]
+        
+        # Média da deviation entre 0 e couvertureMaximale
+        deviationsMoyennes = [sum([abs(retard - chemin.delaiNominal() + carrefour.delaiApproche) for retard in range(couvertureMaximale+1)])\
+                              for chemin in cheminsRobustes]
+        
+        
+        meilleurChemin = cheminsRobustes[np.argmin(deviationsMoyennes)]
+        
         
         for chemin in cheminsPossibles:
             print(chemin)        
