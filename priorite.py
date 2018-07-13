@@ -32,6 +32,7 @@ class Chemin:
         self.sommeNom = pSommeNom
         self.sommeMax = pSommeMax
         self.listeDurees = []
+        self.tempsRouge = []
         
     def append(self, phase):
         self.listePhases.append(phase)
@@ -134,23 +135,22 @@ class Chemin:
         
         return self.listeDurees
     
-    def tempsRouge(self):
+    def calcTempsRouge(self):
         tempsRouge = [ligne.compteurRouge for ligne in self.carrefour.listeLignes]
         
         for ligne in self.carrefour.listeLignes:
             # Somente trata as linhas fechadas
-            if ligne.compteurRouge > 0:
+            if ligne.solicitee and ligne.couleur == 'red':
                 # Inicialização para distinguir se começa em fase ou em interfase
                 if self.origine.type == 'Phase':
                     tempsRouge[ligne.numero] -= self.carrefour.tempsPhase
                 elif self.origine.type == 'Interphase':
                     tempsRouge[ligne.numero] += self.origine.duree - self.carrefour.tempsPhase
-                
+               
                 # Acumula os tempos de vermelho durante a execução do plano
-                for phase1, phase2, duree in zip(self.listePhases, self.listePhases[1:], self.durees()):
+                for phase1,phase2,duree in zip(self.listePhases,self.listePhases[1:],self.durees()):
                     if phase1.lignesActives[ligne.numero] == True:
                         break
-                    
                     tempsRouge[ligne.numero] += duree
                     tempsRouge[ligne.numero] += self.carrefour.matriceInterphase[phase1.numero][phase2.numero].duree
                 
@@ -161,7 +161,6 @@ class Chemin:
                         phase2 = suivant(phase1, self.carrefour.listePhases)
                         while not phase2.solicitee:
                             phase2 = suivant(phase2, self.carrefour.listePhases)
-                            
                         tempsRouge[ligne.numero] += phase1.dureeNominale
                         tempsRouge[ligne.numero] += self.carrefour.matriceInterphase[phase1.numero][phase2.numero].duree
                         
@@ -169,8 +168,13 @@ class Chemin:
 #                # Desconta os segundos de verde da interfase
 #                tempsRouge[ligne.numero] -= (self.carrefour.matriceInterphase[phase1.numero][phase2.numero].duree\
 #                          - self.carrefour.matriceInterphase[phase1.numero][phase2.numero].tempsChangement[ligne.numero])
+        self.tempsRouge =  tempsRouge
+    
+    def maxRouge(self):
+        if not self.tempsRouge: # se ainda nao tiver calculado
+            self.calcTempsRouge()
         
-        return max(tempsRouge)
+        return max(self.tempsRouge)
     
     def getPlan(self):
         plan = []
@@ -193,9 +197,9 @@ class Chemin:
         strDurees = str(self.durees())
         strDelais = str(self.delaiMinimal()) + ' ' + str(self.delaiNominal()) + ' ' + str(self.delaiMaximal())
         strDeviation = 'Deviation: ' + str(self.deviation())
-        strTemps = 'Temps Rouge Max: ' + str(self.tempsRouge())
+        strTemps = 'Temps Rouge Max: ' + str(self.maxRouge())
         
-        return strPhases + '\n' + strDureesNominales + '\n' + strDurees + '\n' + strDelais + '\n' + strDeviation + '\n' + strTemps + '\n'
+        return strPhases + '\n' + strDureesNominales + '\n' + strDurees + '\n' + strDelais + '\n' + strDeviation + '\n' + strTemps
     __repr__ = __str__
     
     
@@ -243,7 +247,10 @@ class Graphe:
                 self.rechercheChemins(sommet, destination, chemin.copy(), delaiApproche)
         
 
-def meilleurChemin(carrefour):        
+def meilleurChemin(carrefour):
+    # Intervalo de atrasos considerado
+    intervalleRetard = 15
+    
     listeChemins = []
     
     listePhasesPrioritaires = [phase for phase in carrefour.listePhases if phase.prioritaire]
@@ -266,35 +273,38 @@ def meilleurChemin(carrefour):
     for chemin in listeChemins:
         if carrefour.delaiApproche <= chemin.delaiMaximal():
             if carrefour.delaiApproche >= chemin.delaiMinimal():
-                if chemin.tempsRouge() < 120:
-                    cheminsPossibles.append(chemin)
+                cheminsPossibles.append(chemin)
             else:
-                if chemin.tempsRouge() < 120:
-                    cheminsLongs.append(chemin)
+                cheminsLongs.append(chemin)
             
     if cheminsPossibles: # Se nao estiver vazia
-#        deviations = [chemin.deviation() for chemin in cheminsPossibles]
-#        meilleurChemin = cheminsPossibles[np.argmin(deviations)]
-        
         # Maximo de atraso toleravel para que o caminho continue valido
-        retardsMaximals = [min([chemin.delaiMaximal()-carrefour.delaiApproche, 120-chemin.tempsRouge()]) for chemin in cheminsPossibles]
+        retardsMaximals = [min([chemin.delaiMaximal()-carrefour.delaiApproche, 120-chemin.maxRouge()]) for chemin in cheminsPossibles]
         
-        # Maior atraso toleravel entre todos os caminhosm com saturação em 15s
-        couvertureMaximale = min([max(retardsMaximals), 15])
+        # Maior atraso toleravel entre todos os caminhos, com saturação em (intervalleRetard)s
+        couvertureMaximale = min([max(retardsMaximals), intervalleRetard])
+        print(couvertureMaximale)
         
         # Lista dos caminhos que cobrem ao máximo intervalo de 15s
         cheminsRobustes = [chemin for chemin,retard in zip(cheminsPossibles,retardsMaximals) if retard >= couvertureMaximale]
         
-        # Média da deviation entre 0 e couvertureMaximale
-        deviationsMoyennes = [sum([abs(retard - chemin.delaiNominal() + carrefour.delaiApproche) for retard in range(couvertureMaximale+1)])\
-                              for chemin in cheminsRobustes]
+        # Caso nenhum caminho satisfaça os 120s, a opçao é pegar o que menos ultrapassa
+        # Nesse caso, couvertureMaximale é setado em 0 para que no calculo de deviationsMoyennes seja simplesmente calculada a deviation para retard=0
+        if couvertureMaximale < 0:
+            couvertureMaximale = 0  
         
+        # Média da deviation entre 0 e couvertureMaximale
+        deviationsMoyennes = [sum([abs(carrefour.delaiApproche + retard - chemin.delaiNominal()) for retard in range(couvertureMaximale+1)])/(couvertureMaximale+1)\
+                              for chemin in cheminsRobustes]
         
         meilleurChemin = cheminsRobustes[np.argmin(deviationsMoyennes)]
         
-        
         for chemin in cheminsPossibles:
-            print(chemin)        
+            print(chemin, end='\n\n')
+        
+#        for chemin,deviation in zip(cheminsRobustes, deviationsMoyennes):
+#            print(chemin)
+#            print('Deviation Moyenne:', deviation, end='\n\n')
         
     else:
         minimums = [chemin.delaiMinimal() for chemin in cheminsLongs]

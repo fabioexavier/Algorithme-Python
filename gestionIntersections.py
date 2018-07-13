@@ -74,6 +74,9 @@ class LigneDeFeu:
         else:
             self.compteurJaune += 1
 
+    def __str__(self):
+        return self.nom
+
 class Carrefour:
     def __init__(self, pListeLignes, pListePhases, pMatriceSecurite):
         self.listeLignes = pListeLignes
@@ -167,6 +170,8 @@ class Carrefour:
         ## Update do plano
         self.cycleBase = [phase for phase in self.listePhases if phase.solicitee]
         
+        self.updateLignesSolicitees()
+        
         if self.delaiApproche >= 0:
             self.modePriorite = True
             self.plan = self.planPriorite()
@@ -187,6 +192,17 @@ class Carrefour:
             self.delaiApproche -= 1
         
         return ([ligne for ligne in self.listeLignes], transition)
+    
+    def updateLignesSolicitees(self):
+        for ligne in self.listeLignes:
+            if ligne.phasesAssociees: # Se a linha for escamotavel
+                ligne.solicitee = any(phase.solicitee for phase in ligne.phasesAssociees)
+                
+            elif ligne.prioritaire:
+                if self.delaiApproche == 0:
+                    ligne.solicitee = True
+                elif ligne.couleur == 'green':
+                    ligne.solicitee = False  
     
     def transition(self):
         if (self.phaseActuelle.type == 'Phase'):
@@ -237,14 +253,14 @@ class Carrefour:
     
     def updateCompteursRouge(self):
         for ligne in self.listeLignes:
-            if ligne.phasesAssociees: # Se a linha for escamotavel
-                ligne.solicitee = any(phase.solicitee for phase in ligne.phasesAssociees)
-                
-            elif ligne.prioritaire:
-                if self.delaiApproche == 0:
-                    ligne.solicitee = True
-                elif ligne.couleur == 'green':
-                    ligne.solicitee = False            
+#            if ligne.phasesAssociees: # Se a linha for escamotavel
+#                ligne.solicitee = any(phase.solicitee for phase in ligne.phasesAssociees)
+#                
+#            elif ligne.prioritaire:
+#                if self.delaiApproche == 0:
+#                    ligne.solicitee = True
+#                elif ligne.couleur == 'green':
+#                    ligne.solicitee = False            
             
             if ligne.couleur == 'red' and ligne.solicitee:
                 ligne.compteurRouge += 1
