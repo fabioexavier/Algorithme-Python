@@ -100,6 +100,7 @@ class Carrefour:
         self.phaseActuelle = self.plan[0]
         self.tempsPhase = 0
         
+        self.codesPriorite = {phase.prioritaire for phase in pListePhases if phase.prioritaire != 0}
         self.modePriorite = False
         self.delaiApproche = -1
         
