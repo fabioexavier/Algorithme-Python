@@ -8,10 +8,8 @@ def suivant(element, liste):
     return liste[index]
 
 class Phase:
-    dureeBus = 3
-    dureeMaxBus = 6
     
-    def __init__(self, pNumero, pLignesActives, pMin, pNom, pMax, pEscamotable, pPrioritaire, pExclusive):
+    def __init__(self, pNumero, pLignesActives, pMin, pNom, pMax, pEscamotable, pPrioritaire, pExclusive, pDureeBus):
         self.numero = pNumero
         self.lignesActives = pLignesActives
         
@@ -25,7 +23,8 @@ class Phase:
         self.prioritaire = pPrioritaire
         self.exclusive = pExclusive
         self.type = 'Phase'
-    
+        
+        self.dureeBus = pDureeBus
     
     def __str__(self):
         return 'Phase '+str(self.numero)            
@@ -100,7 +99,7 @@ class Carrefour:
         self.phaseActuelle = self.plan[0]
         self.tempsPhase = 0
         
-        self.codesPriorite = {phase.prioritaire for phase in pListePhases if phase.prioritaire != 0}
+        self.codesPriorite = {phase.prioritaire for phase in pListePhases}
         self.modePriorite = False
         self.delaiApproche = -1
         
