@@ -1,7 +1,7 @@
 import gestionIntersections as gi
 import numpy as np
-import scipy.optimize as opt
-import pulp
+from swiglpk import *
+import time
 
 # Dossier Reunion
 listeLignes = [gi.LigneDeFeu(0, 'B2', 'Voiture', 3, True),  \
@@ -94,9 +94,9 @@ class Graphe:
 #        print('Codes Demandes:', {demande[1] for demande in demandesPriorite})
 #        print('Max delai:', max([demande[0] for demande in demandesPriorite]))
         
-        comptagesCodes = {}
-        for code in chemin.carrefour.codesPriorite:
-            comptagesCodes[code] = len([demande for demande in demandesPriorite if demande[1] == code])
+#        comptagesCodes = {}
+#        for code in chemin.carrefour.codesPriorite:
+#            comptagesCodes[code] = len([demande for demande in demandesPriorite if demande[1] == code])
             
 #        print('Comptages:', comptagesCodes)
 
@@ -169,6 +169,8 @@ class Graphe:
 carrefour.tempsPhase = 5
 demandesPriorite = [(30,2), (75,1)]
 
+tBegin = time.time()
+
 sommets = [phase for phase in carrefour.listePhases if phase.solicitee or phase.prioritaire]
 numeroSommets = [sommet.numero for sommet in sommets]
 matriceSubgraphe = carrefour.matriceGraphe[numeroSommets,:][:, numeroSommets]
@@ -176,80 +178,198 @@ subgraphe = Graphe(matriceSubgraphe, sommets)
 
 listeChemins = subgraphe.chemins(carrefour, demandesPriorite)
 
+
+
+#chemin = listeChemins[2]
+
+#######################################################################################
+
+# Encapsulamentos
+
+class constraintsMatrix:
+    def __init__(self, M=1000):
+        self.ia = intArray(1+M)
+        self.ja = intArray(1+M)
+        self.ar = doubleArray(1+M)
+        self.N = 0
+        
+    def add(self, i, j, x):
+        self.N += 1
+        self.ia[self.N] = i
+        self.ja[self.N] = j
+        self.ar[self.N] = x
+                
+    def load(self, lp):
+        glp_load_matrix(lp, self.N, self.ia, self.ja, self.ar)
+        
+    def __str__(self):
+        string = ''
+        for i in range(self.N):
+            string += str(self.ia[i+1]) + ' ' + str(self.ja[i+1]) + ' ' + str(self.ar[i+1]) + '\n'
+        string += 'N = ' + str(self.N)
+        return string
+
+
+def glp_print_col(lp, j):
+    lb = glp_get_col_lb(lp, j)
+    ub = glp_get_col_ub(lp, j)
+    name = glp_get_col_name(lp, j)
+    print(lb, '<=', name, '<=', ub)
+    
+def glp_print_row(lp, i):
+    n = glp_get_num_cols(lp)
+    ind = intArray(n+1)
+    val = doubleArray(n+1)
+    glp_get_mat_row(lp, i, ind, val)
+    
+    string = ''
+    for k in range(n):
+        if ind[k+1] == 0:
+            break
+        name = glp_get_col_name(lp, ind[k+1])
+        if string == '':
+            string += str(val[k+1]) + '*' + name
+        else:
+            string += ' + ' + str(val[k+1]) + '*' + name
+    
+    if string == '':
+        string += '0'
+    
+    rowType = glp_get_row_type(lp, i)
+    typeDict = {GLP_LO:' >= ', GLP_UP:' <= '  , GLP_FX:' = '}
+    if rowType in typeDict:
+        string += typeDict[rowType]
+        
+        if rowType == GLP_LO:
+            b = str(glp_get_row_lb(lp, i))
+        else:
+            b = str(glp_get_row_ub(lp, i))
+        string += b
+    
+    print(string)
+    
+
+############################################################################################
+
 for chemin in listeChemins:
     print(chemin)
-
-#######################################################################################"
-    # Teste pulp
     
-    prob = pulp.LpProblem('Distribution des durees', pulp.LpMinimize)
+    lp = glp_create_prob() # Cria o objeto do problema LP
+    glp_set_prob_name(lp, 'problem') # Define o nome do problema
+    glp_set_obj_name(lp, 'Deviation') # Define o nome da funcao objetivo
+    glp_set_obj_dir(lp, GLP_MIN) # Define se queremos maximizar ou minimizar o objetivo
     
-    # Variaveis
+   
     
-    # Duracao das fases
-    x = [None for i in range(len(chemin))]
+    
+    # Add variaveis x
+    colX = glp_add_cols(lp, len(chemin))
     for i,phase in enumerate(chemin.listePhases):
-        if i == 0:
-            mini = max((carrefour.tempsPhase,phase.dureeMinimale))
-        else:
-            mini = phase.dureeMinimale
-        maxi = phase.dureeMaximale
-        x[i] = pulp.LpVariable('x'+str(i), mini, maxi)
+        glp_set_col_name(lp, colX+i, 'x'+str(i+1))
+        glp_set_col_bnds(lp, colX+i, GLP_DB, phase.dureeMinimale, phase.dureeMaximale)
     
-    # Atraso de cada demanda
-    r = [None for i in range(len(demandesPriorite))]
-    for i in range(len(demandesPriorite)):
-        r[i] = pulp.LpVariable('r'+str(i), 0, None)
-    
-    # Extras para poder tratar soma de valores absolutos como linear
-    u = [None for i in range(len(chemin))]
-    for i in range(len(chemin)):
-        u[i] = pulp.LpVariable('u'+str(i), 0, None)
-    
-    
-    # Funcao objetivo
-    obj = 0
-    for ui in u:
-        obj += ui
-    for ri in r:
-        obj += 100*ri
-    prob += obj, 'Deviation totale par rapport aux temps nominaux'
-    
-    # Restricoes dos delais
-    for j,demande in enumerate(demandesPriorite):
-        indexPassage = [phase.prioritaire==demande[1] for phase in chemin.listePhases].index(True)
+    if carrefour.phaseActuelle.type == 'Phase': # Ajusta o LB de x1 caso necessario
+        phase0 = chemin.listePhases[0]
+        if carrefour.tempsPhase > phase0.dureeMinimale:
+            glp_set_col_bnds(lp, colX,GLP_DB, carrefour.tempsPhase, phase.dureeMaximale)
         
-        sommeX = 0
-        sommeInterphases = 0
-        for i in range(indexPassage):
-            sommeX += x[i]
-            phase1 = chemin.listePhases[i]
-            phase2 = chemin.listePhases[i+1]
-            sommeInterphases += carrefour.matriceInterphase[phase1.numero][phase2.numero].duree
+    # Add variaveis u
+    colU = glp_add_cols(lp, len(chemin))
+    for i,phase in enumerate(chemin.listePhases):
+        glp_set_col_name(lp, colU+i, 'u'+str(i+1))
+        glp_set_col_bnds(lp, colU+i, GLP_LO, 0, 0)
+        glp_set_obj_coef(lp, colU+i, 1)
         
-        prob += sommeX <= demande[0]+r[j] + carrefour.tempsPhase - sommeInterphases, 'LB demande '+str(j)
-        prob += sommeX+x[indexPassage] >= demande[0]+r[j] + carrefour.tempsPhase - sommeInterphases + chemin.listePhases[indexPassage].dureeBus, 'UB demande '+str(j)
+    # Add variaveis r
+    colR = glp_add_cols(lp, len(demandesPriorite))
+    for i,demande in enumerate(demandesPriorite):
+        glp_set_col_name(lp, colR+i, 'r'+str(i+1))
+        glp_set_col_bnds(lp, colR+i, GLP_LO, 0, 0)
+        glp_set_obj_coef(lp, colR+i, 100)
+    
+    # Matriz de restriçoes
+    glp_matrix = constraintsMatrix()
     
     # Restricoes de u
+    rowU = glp_add_rows(lp, 2*len(chemin))
     for i,phase in enumerate(chemin.listePhases):
-        prob += u[i] >= x[i]-phase.dureeNominale, 'u'+str(i)+' pos'
-        prob += u[i] >= -(x[i]-phase.dureeNominale), 'u'+str(i)+' neg'
-    
-    
-    
-    # Solve
-    #print(prob)
-    
-    prob.solve()
-    
-    print("Status:", pulp.LpStatus[prob.status])
-    
-    for xi in x:
-        print(xi.name, "=", xi.varValue)
-    for ri in r:
-        print(ri.name, "=", ri.varValue)
+        glp_set_row_name(lp, rowU+2*i,'u'+str(i+1)+'<')
+        glp_matrix.add(rowU+2*i, colX+i, 1)
+        glp_matrix.add(rowU+2*i, colU+i, -1)
+        glp_set_row_bnds(lp, rowU+2*i, GLP_UP, 0, phase.dureeNominale)
         
-    print("Deviation totale = ", np.sum([ui.varValue for ui in u]))
-    print("Score = ", pulp.value(prob.objective))
+        glp_set_row_name(lp, rowU+2*i+1,'u'+str(i+1)+'>')
+        glp_matrix.add(rowU+2*i+1, colX+i, 1)
+        glp_matrix.add(rowU+2*i+1, colU+i, 1)
+        glp_set_row_bnds(lp, rowU+2*i+1, GLP_LO, phase.dureeNominale, 0)
+    
+    # Restricoes de delai
+    rowD = glp_add_rows(lp, 2*len(demandesPriorite))
+    for i,demande in enumerate(demandesPriorite):
+        index = [phase.prioritaire==demande[1] for phase in chemin.listePhases].index(True)
+        
+        sommeInterphases = 0
+        for k in range(index):
+            phase1 = chemin.listePhases[k]
+            phase2 = chemin.listePhases[k+1]
+            sommeInterphases += carrefour.matriceInterphase[phase1.numero][phase2.numero].duree
+        
+        glp_set_row_name(lp, rowD+2*i,'demande'+str(i+1)+'<')
+        glp_set_row_name(lp, rowD+2*i+1,'demande'+str(i+1)+'>')
+        for j in range(index):
+            glp_matrix.add(rowD+2*i, colX+j, 1)
+            glp_matrix.add(rowD+2*i+1, colX+j, 1)
+        glp_matrix.add(rowD+2*i+1, colX+index, 1)
+        glp_matrix.add(rowD+2*i, colR+i, -1)
+        glp_matrix.add(rowD+2*i+1, colR+i, -1)
+        b = float(demande[0] + carrefour.tempsPhase - sommeInterphases)
+        if carrefour.phaseActuelle.type == 'Interphase':
+            b -= carrefour.phaseActuelle.duree
+        glp_set_row_bnds(lp, rowD+2*i, GLP_UP, 0, b)
+        glp_set_row_bnds(lp, rowD+2*i+1, GLP_LO, b+chemin.listePhases[index].dureeBus, 0)
+    
+    # Carrega matriz de restriçoes
+    glp_matrix.load(lp)
+    
+    
+    
+    # Resolve o problema
+    parm = glp_smcp()
+    glp_init_smcp(parm)
+#    parm.meth = GLP_DUAL
+    glp_simplex(lp, parm)
+    
+    
+    # Leitura variaveis
+    if glp_get_status(lp) == GLP_OPT:
+        z = glp_get_obj_val(lp)
+        
+        x = []
+        u = []
+        r = []
+        for i in range(len(chemin)):
+            x.append(glp_get_col_prim(lp, colX+i))
+            u.append(glp_get_col_prim(lp, colU+i))
+        for j in range(len(demandesPriorite)):
+            r.append(glp_get_col_prim(lp, colR+j))
+        
+    #    for i in range(glp_get_num_rows(lp)):
+    #        glp_print_row(lp,i+1)
+        
+        print('z', z)
+        print('x', x)
+        print('u', u)
+        print('r', r)
+        print('')
+    
+    # Fim
+    glp_delete_prob(lp)
 
-    print('')
+tEnd = time.time()
+
+print(tEnd-tBegin)
+    
+    
+    
+    
+    
