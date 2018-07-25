@@ -177,7 +177,7 @@ class Graphe:
 
 # (delaiApproche, code)
 carrefour.tempsPhase = 5
-demandesPriorite = [(75,1), (30,2)]
+demandesPriorite = [(75,1), (145,1), (52,2), (160,2)]
 
 tBegin = time.time()
 
@@ -202,14 +202,12 @@ class constraintsMatrix:
         self.ja = intArray(1+M)
         self.ar = doubleArray(1+M)
         self.N = 0
-        self.M = M
         
     def add(self, i, j, x):
-        if self.N < self.M:
-            self.N += 1
-            self.ia[self.N] = i
-            self.ja[self.N] = j
-            self.ar[self.N] = x
+        self.N += 1
+        self.ia[self.N] = i
+        self.ja[self.N] = j
+        self.ar[self.N] = x
                 
     def load(self, lp):
         glp_load_matrix(lp, self.N, self.ia, self.ja, self.ar)
@@ -258,22 +256,21 @@ def glp_print_row(lp, i):
             b = str(glp_get_row_ub(lp, i))
         string += b
     
-    name = glp_get_row_name(lp, i)
-    if name == None:
-        name = ''
-    print(name + ' : ' + string)
+    print(string)
     
 
 ############################################################################################
 
-for chemin in listeChemins:
+for chemin in listeChemins[68:69]:
     print(chemin)
     
     lp = glp_create_prob() # Cria o objeto do problema LP
     glp_set_prob_name(lp, 'problem') # Define o nome do problema
     glp_set_obj_name(lp, 'Deviation') # Define o nome da funcao objetivo
     glp_set_obj_dir(lp, GLP_MIN) # Define se queremos maximizar ou minimizar o objetivo
-        
+    
+   
+    
     
     # Add variaveis x
     colX = glp_add_cols(lp, len(chemin))
@@ -306,113 +303,81 @@ for chemin in listeChemins:
     # Restricoes de u
     rowU = glp_add_rows(lp, 2*len(chemin))
     for i,phase in enumerate(chemin.listePhases):
-        glp_set_row_name(lp, rowU+2*i,'u'+str(i+1)+'eq1')
+        glp_set_row_name(lp, rowU+2*i,'u'+str(i+1)+'<')
         glp_matrix.add(rowU+2*i, colX+i, 1)
         glp_matrix.add(rowU+2*i, colU+i, -1)
         glp_set_row_bnds(lp, rowU+2*i, GLP_UP, 0, phase.dureeNominale)
         
-        glp_set_row_name(lp, rowU+2*i+1,'u'+str(i+1)+'eq2')
+        glp_set_row_name(lp, rowU+2*i+1,'u'+str(i+1)+'>')
         glp_matrix.add(rowU+2*i+1, colX+i, 1)
         glp_matrix.add(rowU+2*i+1, colU+i, 1)
         glp_set_row_bnds(lp, rowU+2*i+1, GLP_LO, phase.dureeNominale, 0)
     
     # Restricoes de delai
-    rowV = [0 for k in demandesPriorite] # rowV[i] representa a coluna onde comecam as restricoes de delai do veiculo i
-    colH = [0 for k in demandesPriorite] # colH[i] representa a coluna onde comecam as variaveis h do veiculo i
-    M = 1000 # Big M
-    
+    rowD = glp_add_rows(lp, 2*len(demandesPriorite))
     for i,demande in enumerate(demandesPriorite):
-        P = [index for index in range(len(chemin)) if chemin.listePhases[index].prioritaire == demande[1]]
-        # Adiciona as variaveis h
-        colH[i] = glp_add_cols(lp, len(P))
-        rowV[i] = glp_add_rows(lp, 2*len(P)+1)
-        for j,p in enumerate(P):
-            # Configuracao das variaveis h
-            glp_set_col_name(lp, colH[i]+j, 'h'+str(i+1)+str(j+1))
-            glp_set_col_kind(lp, colH[i]+j, GLP_BV)
-            
-            # Soma das duracoes de interfase
-            sommeInterphases = 0
-            for m in range(p):
-                phase1 = chemin.listePhases[m]
-                phase2 = chemin.listePhases[m+1]
-                sommeInterphases += carrefour.matriceInterphase[phase1.numero][phase2.numero].duree
-            if carrefour.phaseActuelle.type == 'Interphase':
-                sommeInterphases += carrefour.phaseActuelle.duree
-            
-            #Equaçao 1
-            glp_set_row_name(lp, rowV[i]+2*j, 'v'+str(i+1)+str(j+1)+'eq1')
-            for m in range(p):
-                glp_matrix.add(rowV[i]+2*j, colX+m, 1)
-            glp_matrix.add(rowV[i]+2*j, colR+i, -1)
-            glp_matrix.add(rowV[i]+2*j, colH[i]+j, M)
-            b = demande[0] + carrefour.tempsPhase - sommeInterphases
-            glp_set_row_bnds(lp, rowV[i]+2*j, GLP_UP, 0, float(b+M))
-            
-            #Equaçao 2
-            glp_set_row_name(lp, rowV[i]+2*j+1, 'v'+str(i+1)+str(j+1)+'eq2')
-            for m in range(p+1):
-                glp_matrix.add(rowV[i]+2*j+1, colX+m, 1)
-            glp_matrix.add(rowV[i]+2*j+1, colR+i, -1)
-            glp_matrix.add(rowV[i]+2*j+1, colH[i]+j, -M)
-            b = demande[0] + carrefour.tempsPhase - sommeInterphases
-            glp_set_row_bnds(lp, rowV[i]+2*j+1, GLP_LO, float(b+chemin.listePhases[p].dureeBus-M), 0)
-            
-        #Equaçao Final
-        glp_set_row_name(lp, rowV[i]+2*len(P), 'v'+str(i+1)+'sum')
-        for m in range(len(P)):
-            glp_matrix.add(rowV[i]+2*len(P), colH[i]+m, 1)
-        glp_set_row_bnds(lp, rowV[i]+2*len(P), GLP_FX, 1, 1)
+        index = [phase.prioritaire==demande[1] for phase in chemin.listePhases].index(True)
         
-#     Carrega matriz de restriçoes
-    glp_matrix.load(lp) 
+        sommeInterphases = 0
+        for k in range(index):
+            phase1 = chemin.listePhases[k]
+            phase2 = chemin.listePhases[k+1]
+            sommeInterphases += carrefour.matriceInterphase[phase1.numero][phase2.numero].duree
+        
+        glp_set_row_name(lp, rowD+2*i,'demande'+str(i+1)+'<')
+        glp_set_row_name(lp, rowD+2*i+1,'demande'+str(i+1)+'>')
+        for j in range(index):
+            glp_matrix.add(rowD+2*i, colX+j, 1)
+            glp_matrix.add(rowD+2*i+1, colX+j, 1)
+        glp_matrix.add(rowD+2*i+1, colX+index, 1)
+        glp_matrix.add(rowD+2*i, colR+i, -1)
+        glp_matrix.add(rowD+2*i+1, colR+i, -1)
+        b = float(demande[0] + carrefour.tempsPhase - sommeInterphases)
+        if carrefour.phaseActuelle.type == 'Interphase':
+            b -= carrefour.phaseActuelle.duree
+        glp_set_row_bnds(lp, rowD+2*i, GLP_UP, 0, b)
+        glp_set_row_bnds(lp, rowD+2*i+1, GLP_LO, b+chemin.listePhases[index].dureeBus, 0)
+    
+    # Carrega matriz de restriçoes
+    glp_matrix.load(lp)
+    
+    
     
     # Resolve o problema
-    parm = glp_iocp()
-    glp_init_iocp(parm)
-    parm.presolve = GLP_ON
-    glp_intopt(lp, parm)
+    parm = glp_smcp()
+    glp_init_smcp(parm)
+#    parm.meth = GLP_DUAL
+    glp_simplex(lp, parm)
+    
     
     # Leitura variaveis
-    status = glp_mip_status(lp)
+    status = glp_get_status(lp)
     if status == GLP_OPT:
-        z = round(glp_mip_obj_val(lp))
+        z = glp_get_obj_val(lp)
         
         x = []
         u = []
         r = []
-        h = []
         for i in range(len(chemin)):
-            x.append(round(glp_mip_col_val(lp, colX+i)))
-            u.append(round(glp_mip_col_val(lp, colU+i)))
+            x.append(glp_get_col_prim(lp, colX+i))
+            u.append(glp_get_col_prim(lp, colU+i))
         for j in range(len(demandesPriorite)):
-            r.append(round(glp_mip_col_val(lp, colR+j)))
-        for i,demande in enumerate(demandesPriorite):
-            P = [index for index in range(len(chemin)) if chemin.listePhases[index].prioritaire == demande[1]]
-            row = []
-            for j in range(len(P)):
-                row.append(round(glp_mip_col_val(lp, colH[i]+j)))
-            h.append(row)
+            r.append(glp_get_col_prim(lp, colR+j))
                 
         print('z', z)
         print('x', x)
         print('u', u)
         print('r', r) 
-        print('h', h)
-##
-#    for i in range(glp_get_num_cols(lp)):
-#        glp_print_col(lp,i+1)
 
-#    for i in range(glp_get_num_rows(lp)):
-#        glp_print_row(lp,i+1)
-#    print('')
+    for i in range(glp_get_num_rows(lp)):
+        glp_print_row(lp,i+1)
+    print('')
      
     # Fim
     glp_delete_prob(lp)
 
 tEnd = time.time()
 
-print(len(listeChemins))
 print('Tempo (ms):', 1000*(tEnd-tBegin))
     
     
