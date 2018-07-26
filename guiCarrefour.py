@@ -10,7 +10,7 @@ class AppIntersection(tk.Frame):
         self.diagrammeLignes = DiagrammeLignes(self)
         self.buttonPause = tk.Button(self, text='Pause', command = self.pauser)
         self.buttonPhases = [tk.Button(self, text='Phase '+str(i), command=lambda i=i:self.soliciterPhase(i)) \
-                         for i,phase in enumerate(self.carrefour.listePhases) if phase.escamotable and not phase.prioritaire]
+                         for i,phase in enumerate(self.carrefour.listePhases) if phase.escamotable and not phase.codePriorite]
         self.entryDelai = tk.Entry(self, width=5)
         self.buttonDelai = tk.Button(self, text='Envoyer', command=lambda: self.envoyerDelai(self.entryDelai.get()))
         
@@ -31,26 +31,30 @@ class AppIntersection(tk.Frame):
     
     def envoyerDelai(self, delaiString):
         try:
-            delai = int(delaiString)
-            self.carrefour.delaiApproche = delai
+            delaiApproche = int(delaiString)
+            self.carrefour.demanderPriorite(delaiApproche, 1, 1)
         except ValueError:
             pass
     
     def cycleCarrefour(self):
         if (not self.pause):
-            lignes, transition = self.carrefour.update()
+            self.carrefour.update()
+            lignes = self.carrefour.listeLignes
             couleurs = [ligne.couleur for ligne in lignes]
+            transition = self.carrefour.transition
+            phase = self.carrefour.phaseActuelle.numero if self.carrefour.phaseActuelle.type == 'phase' else None
+            delaiApproche = self.carrefour.demandesPriorite[0].delaiApproche if self.carrefour.demandesPriorite else None
             compteursRouge = [ligne.compteurRouge for ligne in lignes]
-            phase = self.carrefour.phaseActuelle.numero if self.carrefour.phaseActuelle.type == 'Phase' else None
-            self.diagrammeLignes.add(couleurs, transition, phase, self.carrefour.tempsPhase, self.carrefour.delaiApproche, compteursRouge)
+            
+            self.diagrammeLignes.add(couleurs, transition, phase, self.carrefour.tempsPhase, delaiApproche, compteursRouge)
             
         self.after(300, self.cycleCarrefour)
     
 class DiagrammeLignes(tk.Canvas):
     def __init__(self, master):
-        self.nomLignes = master.carrefour.nomLignes()
-        self.nombreLignes = len(self.nomLignes)
-        self.compteursRouge = [0 for i in range(self.nombreLignes)]
+        self.nomLignes = [ligne.nom for ligne in master.carrefour.listeLignes]
+        self.nombreLignes = len(master.carrefour.listeLignes)
+        self.compteursRouge = [ligne.compteurRouge for ligne in master.carrefour.listeLignes]
         
         self.x0 = 40
         self.y0 = 45
@@ -121,7 +125,7 @@ class DiagrammeLignes(tk.Canvas):
             self.create_text(x+self.lx, self.y0-10, text=str(temps))
             
             # Delai Approche
-            if delai >= 0:
+            if delai != None:
                 self.create_text(x+self.lx, self.y0+3*self.ly*self.nombreLignes-self.ly, text=str(delai))
         
         # Compteur Rouge
