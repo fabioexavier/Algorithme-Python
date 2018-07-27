@@ -1,4 +1,5 @@
 import numpy as np
+import priorite as pri
 
 def suivant(element, liste):
     index = liste.index(element) + 1
@@ -14,8 +15,7 @@ class Phase:
         self.dureeMinimale = pMin
         self.dureeNominale = pNom
         self.dureeMaximale = pMax
-        self.duree = self.dureeNominale # Varia ao longo da execuçao
-        
+
         self.escamotable = pEscamotable
         self.solicitee = not pEscamotable # Inicializa todas as fases escamotaveis como nao solicitadas
         self.codePriorite = pCodePriorite
@@ -51,11 +51,24 @@ class LigneDeFeu:
         self.compteurJaune = 0
         self.compteurRouge = 0
         self.phasesAssociees = [] # Fases escamotaveis ligadas a essa linha
-        self.solicitee = not self.codePriorite # Linhas prioritarias inicializam nao solicitadas
-        # Falta desativar solicitacao das linhas escamotaveis, o que é feito no construtor de Carrefour pq é necessario conhecer as fases escamotaveis
         
         self.couleur = 'red'
         
+        self.carrefour = None
+    
+    def solicitee(self):
+        if self.codePriorite: # Linha prioritaria
+            # Linha solicitada se existir algum veiculo com o mesmo codigo esperando
+            return bool([demande for demande in self.carrefour.demandesPriorite \
+                         if demande.delaiApproche <= 0 and demande.codePriorite == self.codePriorite])
+                            
+        elif self.phasesAssociees: # Linha escamotavel
+            # Linha solicitada se pelo menos uma das fases associadas estiver solicitada
+            return any(phase.solicitee for phase in self.phasesAssociees)
+        
+        else: # Linha normal
+            return True
+    
     def __str__(self):
         return self.nom
 
@@ -64,10 +77,17 @@ class DemandePriorite:
         self.delaiApproche = pDelaiApproche
         self.codePriorite = pCodePriorite
         self.codeVehicule = pCodeVehicule
+        
+    def __str__(self):
+        return str((self.delaiApproche,self.codePriorite,self.codeVehicule))
+    __repr__ = __str__
 
 class Carrefour:
     def __init__(self, pListeLignes, pListePhases, pMatriceSecurite):
         self.listeLignes = pListeLignes
+        for ligne in self.listeLignes:
+            ligne.carrefour = self
+        
         self.listePhases = pListePhases
         self.matriceSecurite = np.array(pMatriceSecurite)
         
@@ -77,7 +97,6 @@ class Carrefour:
                 phases = [phase for phase in self.listePhases if phase.lignesActives[ligne.numero] == True]
                 if all(phase.escamotable for phase in phases):
                     ligne.phasesAssociees = [phase for phase in phases if not phase.codePriorite]
-                    ligne.solicitee = False
                 
         self.matriceGraphe = self.calcGraphe()
         self.matriceInterphase = self.genererInterphases()
@@ -87,13 +106,13 @@ class Carrefour:
             self.phaseActuelle = phase
             if not self.phaseActuelle.escamotable:
                 break
+        self.dureeActuelle = self.phaseActuelle.dureeNominale
         self.tempsPhase = 0
         
         self.transition = False # Indica se fez uma transicao no segundo atual
         
         # Variaveis de prioridade
         self.codesPriorite = {phase.codePriorite for phase in pListePhases}
-        self.modePriorite = False
         self.demandesPriorite = []
         
     def calcGraphe(self):
@@ -160,57 +179,8 @@ class Carrefour:
         return Interphase(phase1, phase2, tempsChangement, duree)
     
     def update(self):
-        # Atualiza quais linhas foram solicitadas
-        for ligne in self.listeLignes:
-            # Se a linha for escamotavel
-            if ligne.phasesAssociees: 
-                ligne.solicitee = any(phase.solicitee for phase in ligne.phasesAssociees)
-                
-            # Se a linha for prioritaria
-            elif ligne.codePriorite:
-                # Linha solicitada se existir algum veiculo com o mesmo codigo esperando
-                demandesEnAttente = [demande for demande in self.demandesPriorite if demande.delaiApproche <= 0 and demande.codePriorite == ligne.codePriorite]
-                if demandesEnAttente:
-                    ligne.solicitee = True
-                # Linha deixa de ser solicitada quando abrir
-                elif ligne.couleur == 'green':
-                    ligne.solicitee = False 
-        
-        # Modo prioritario sse houver alguma demanda
-        self.modePriorite = True if self.demandesPriorite else False
-        
         # Transicao de fases
         self.transition = False
-        
-        # Decide a duracao da fase atual e qual sera a proxima fase
-        if self.modePriorite:
-            pass
-        else:
-            if self.phaseActuelle.type == 'phase':
-                self.phaseActuelle.duree = self.phaseActuelle.dureeNominale
-                
-                # Avança na lista de fases ate achar uma fase solicitada
-                self.phaseProchaine = suivant(self.phaseActuelle, self.listePhases)
-                while not self.phaseProchaine.solicitee:
-                    self.phaseProchaine = suivant(self.phaseProchaine, self.listePhases)
-        
-        # Se chegou no fim da fase
-        if self.tempsPhase >= self.phaseActuelle.duree: # Se chegou no fim da fase/interfase
-            if self.phaseActuelle.type == 'phase':
-                # Reset da solicitaçao se a fase for escamotavel
-                if self.phaseActuelle.escamotable:
-                    self.phaseActuelle.solicitee = False
-                
-                # Troca de fase
-                if self.phaseProchaine != self.phaseActuelle:
-                    self.phaseActuelle = self.interphase(self.phaseActuelle, self.phaseProchaine)
-                    self.tempsPhase = 0
-                    self.transition = True
-                    
-            elif self.phaseActuelle.type == 'interphase':
-                self.phaseActuelle = self.phaseActuelle.phaseDestination
-                self.tempsPhase = 0
-                self.transition = True
         
         # Remove as demandas de prioridade que foram atendidas
         # Considera-se a demanda atendida quando a fase atual permite que o veiculo passe E
@@ -221,6 +191,46 @@ class Carrefour:
                     if min((self.tempsPhase, -demande.delaiApproche)) >= self.phaseActuelle.dureeBus:
                         demande.codePriorite = 0
             self.demandesPriorite = [demande for demande in self.demandesPriorite if demande.codePriorite > 0]
+        
+        
+        # Decide a duracao da fase atual e qual sera a proxima fase
+        if self.phaseActuelle.type == 'phase':
+            if self.demandesPriorite:
+                print(self.demandesPriorite)
+                self.dureeActuelle,self.phaseProchaine = pri.cheminPrioritaire(self)
+                if self.phaseProchaine == None:
+                    self.phaseProchaine = suivant(self.phaseActuelle, self.listePhases)
+                    while not self.phaseProchaine.solicitee:
+                        self.phaseProchaine = suivant(self.phaseProchaine, self.listePhases)
+            else:
+                self.dureeActuelle = self.phaseActuelle.dureeNominale
+                
+                # Avança na lista de fases ate achar uma fase solicitada
+                self.phaseProchaine = suivant(self.phaseActuelle, self.listePhases)
+                while not self.phaseProchaine.solicitee:
+                    self.phaseProchaine = suivant(self.phaseProchaine, self.listePhases)
+        
+        # Se chegou no fim da fase
+        if self.tempsPhase >= self.dureeActuelle: # Se chegou no fim da fase/interfase
+            if self.phaseActuelle.type == 'phase':
+                # Reset da solicitaçao se a fase for escamotavel
+                if self.phaseActuelle.escamotable:
+                    self.phaseActuelle.solicitee = False
+                
+                # Troca de fase
+                if self.phaseProchaine != self.phaseActuelle:
+                    self.phaseActuelle = self.interphase(self.phaseActuelle, self.phaseProchaine)
+                    if self.phaseActuelle.duree > 0: # Pula a interfase se a duraçao for 0
+                        self.dureeActuelle = self.phaseActuelle.duree
+                    else:
+                        self.phaseActuelle = self.phaseActuelle.phaseDestination
+                    self.tempsPhase = 0
+                    self.transition = True
+                    
+            elif self.phaseActuelle.type == 'interphase':
+                self.phaseActuelle = self.phaseActuelle.phaseDestination
+                self.tempsPhase = 0
+                self.transition = True
         
         # Atualiza a cor de cada linha
         for i,ligne in enumerate(self.listeLignes):
@@ -243,12 +253,12 @@ class Carrefour:
                     ligne.couleur = 'red'
                 else:
                     ligne.compteurJaune += 1
-        
+                
         # Atualiza contadores
         self.tempsPhase += 1
         
         for ligne in self.listeLignes:          
-            if ligne.couleur == 'red' and ligne.solicitee:
+            if ligne.couleur == 'red' and ligne.solicitee():
                 ligne.compteurRouge += 1
                 
             elif ligne.couleur == 'green':
@@ -256,7 +266,7 @@ class Carrefour:
         
         for demande in self.demandesPriorite:
             demande.delaiApproche -= 1
-        
+            
     def interphase(self, phase1, phase2):
         return self.matriceInterphase[phase1.numero][phase2.numero]
         

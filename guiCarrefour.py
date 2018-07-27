@@ -7,19 +7,40 @@ class AppIntersection(tk.Frame):
         self.carrefour = pCarrefour
         self.pause = False
         
-        self.diagrammeLignes = DiagrammeLignes(self)
-        self.buttonPause = tk.Button(self, text='Pause', command = self.pauser)
-        self.buttonPhases = [tk.Button(self, text='Phase '+str(i), command=lambda i=i:self.soliciterPhase(i)) \
-                         for i,phase in enumerate(self.carrefour.listePhases) if phase.escamotable and not phase.codePriorite]
-        self.entryDelai = tk.Entry(self, width=5)
-        self.buttonDelai = tk.Button(self, text='Envoyer', command=lambda: self.envoyerDelai(self.entryDelai.get()))
+        self.codes = [code for code in self.carrefour.codesPriorite if code != 0]
+        self.vehiculesParCode = 3
         
-        self.diagrammeLignes.pack()
-        self.buttonPause.pack()
-        for button in self.buttonPhases:
-            button.pack()
-        self.entryDelai.pack()
-        self.buttonDelai.pack()
+        # Criaçao dos widgets
+        self.diagrammeLignes = DiagrammeLignes(self)
+                
+        self.buttonPause = tk.Button(self, text='Pause', command = self.pauser)
+        
+        self.frameEscamotable = tk.Frame(self)
+        self.buttonsPhase = [tk.Button(self.frameEscamotable, text='Phase '+str(i), command=lambda i=i:self.soliciterPhase(i)) \
+                         for i,phase in enumerate(self.carrefour.listePhases) if phase.escamotable and not phase.codePriorite]
+        
+        self.framePriorite = tk.Frame(self)
+        self.entriesDelai = [tk.Entry(self.framePriorite, width=15) for i in range(len(self.codes)*self.vehiculesParCode)]
+        self.buttonsDelai = [tk.Button(self.framePriorite, text='Envoyer', command=lambda i=i:self.envoyerDelai(i)) \
+                            for i in range(len(self.codes)*self.vehiculesParCode)]
+        
+        # Posicionamento
+        self.diagrammeLignes.grid(column=0, row=0, columnspan=2)
+        self.buttonPause.grid(column=0, row=1, columnspan=2, pady=15)
+        self.frameEscamotable.grid(column=0, row=2)
+        self.framePriorite.grid(column=1, row=2)
+        
+        # Frame fases escamotaveis
+        for i,button in enumerate(self.buttonsPhase):
+            button.grid(column=i, row=0, padx=15)
+
+        # Frame demandas prioridade
+        for i,code in enumerate(self.codes):
+            tk.Label(self.framePriorite, text='Code '+str(code), font='Helvetica 10 bold').grid(column=2*i, row=0, columnspan=2)
+            
+        for i,(entry,button) in enumerate(zip(self.entriesDelai, self.buttonsDelai)):
+            entry.grid(column=2*(i//self.vehiculesParCode), row=1+i%self.vehiculesParCode, padx=5, pady=5)
+            button.grid(column=2*(i//self.vehiculesParCode)+1, row=1+i%self.vehiculesParCode, padx=5, pady=5)
         
         self.after(0, self.cycleCarrefour)
     
@@ -29,26 +50,34 @@ class AppIntersection(tk.Frame):
     def soliciterPhase(self,n):
         self.carrefour.soliciterPhase(n)
     
-    def envoyerDelai(self, delaiString):
+    def envoyerDelai(self, index):
         try:
-            delaiApproche = int(delaiString)
-            self.carrefour.demanderPriorite(delaiApproche, 1, 1)
+            delaiApproche = int(self.entriesDelai[index].get())
+            codePriorite = self.codes[index//self.vehiculesParCode]
+            codeVehicule = index
+            self.carrefour.demanderPriorite(delaiApproche, codePriorite, codeVehicule)
+            
         except ValueError:
             pass
     
     def cycleCarrefour(self):
-        if (not self.pause):
+        if not self.pause:
             self.carrefour.update()
+            
             lignes = self.carrefour.listeLignes
             couleurs = [ligne.couleur for ligne in lignes]
-            transition = self.carrefour.transition
-            phase = self.carrefour.phaseActuelle.numero if self.carrefour.phaseActuelle.type == 'phase' else None
-            delaiApproche = self.carrefour.demandesPriorite[0].delaiApproche if self.carrefour.demandesPriorite else None
             compteursRouge = [ligne.compteurRouge for ligne in lignes]
             
-            self.diagrammeLignes.add(couleurs, transition, phase, self.carrefour.tempsPhase, delaiApproche, compteursRouge)
+            transition = self.carrefour.transition
+            phase = self.carrefour.phaseActuelle.numero if self.carrefour.phaseActuelle.type == 'phase' else None
             
-        self.after(300, self.cycleCarrefour)
+            delaisApproche = [None]*len(self.codes)*self.vehiculesParCode
+            for demande in self.carrefour.demandesPriorite:
+                delaisApproche[demande.codeVehicule] = demande.delaiApproche            
+            
+            self.diagrammeLignes.add(couleurs, transition, phase, self.carrefour.tempsPhase, delaisApproche, compteursRouge)
+            
+        self.after(500, self.cycleCarrefour)
     
 class DiagrammeLignes(tk.Canvas):
     def __init__(self, master):
@@ -62,7 +91,10 @@ class DiagrammeLignes(tk.Canvas):
         self.ly = 10
         self.maxLen = 65
         
-        tk.Canvas.__init__(self, master, width=(self.maxLen+4)*self.lx, height=3*self.ly*(self.nombreLignes+2))
+        self.width = (self.maxLen+4)*self.lx
+        self.height = 3*self.ly*(self.nombreLignes+1)+15*len(master.codes)*master.vehiculesParCode
+        
+        tk.Canvas.__init__(self, master, width=self.width, height=self.height)
         self.pause = False
         
         self.bufferLignes = []
@@ -99,7 +131,7 @@ class DiagrammeLignes(tk.Canvas):
         # Barra no inicio
         self.create_line(self.x0, self.y0, self.x0, self.y0+3*self.ly*self.nombreLignes-2*self.ly, width=2)
         
-        for i, (vecCouleurs,transition,phase,temps,delai) in enumerate(zip(self.bufferLignes, self.bufferTransitions, self.bufferPhases, self.bufferTemps, self.bufferDelais)):
+        for i, (vecCouleurs,transition,phase,temps,delais) in enumerate(zip(self.bufferLignes, self.bufferTransitions, self.bufferPhases, self.bufferTemps, self.bufferDelais)):
             x = self.x0 + self.lx*i
             
             # Barra a cada segundo
@@ -125,8 +157,9 @@ class DiagrammeLignes(tk.Canvas):
             self.create_text(x+self.lx, self.y0-10, text=str(temps))
             
             # Delai Approche
-            if delai != None:
-                self.create_text(x+self.lx, self.y0+3*self.ly*self.nombreLignes-self.ly, text=str(delai))
+            for j,delai in enumerate(delais):
+                if delai != None:
+                    self.create_text(x+self.lx, self.y0+3*self.ly*self.nombreLignes+(j-1)*15+8, text=str(delai))
         
         # Compteur Rouge
         for i,temps in enumerate(self.compteursRouge):

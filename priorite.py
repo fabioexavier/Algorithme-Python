@@ -1,207 +1,60 @@
+import gestionIntersections as gi
 import numpy as np
-
-def suivant(element, liste):
-    index = liste.index(element) + 1
-    if index == len(liste):
-        index = 0
-    return liste[index]
-
-def precedent(element, liste):
-    index = liste.index(element) - 1
-    if index < 0:
-        index = len(liste) - 1
-    return liste[index]
-
-def zoneMorte(x, gap):
-    if gap < 0:
-        gap = 0
-    if x <= -gap:
-        return x + gap
-    elif x <= gap:
-        return 0
-    else:
-        return x - gap
-
+from swiglpk import *
+import time
 
 class Chemin:
-    def __init__(self, pOrigine, pCarrefour, pListePhases, pSommeMin=0, pSommeNom=0, pSommeMax=0):
-        self.origine = pOrigine
+    def __init__(self, pCarrefour, pListePhases=None, pSommeMin=0, pComptagesCodes=None):
         self.carrefour = pCarrefour
         self.listePhases = pListePhases
         self.sommeMin = pSommeMin
-        self.sommeNom = pSommeNom
-        self.sommeMax = pSommeMax
-        self.listeDurees = []
-        self.tempsRouge = []
+        self.comptagesCodes = pComptagesCodes
         
+        self.score = -1
+        self.durees = []
+        self.deviations = []
+        self.retards = []
+        
+        # Inicializa o caminho partindo da fase atual do carrefour
+        if pListePhases == None:
+            origine = pCarrefour.phaseActuelle
+
+            if origine.type == 'phase':
+                self.listePhases = [origine]
+                self.sommeMin = origine.dureeMinimale - pCarrefour.tempsPhase if origine.dureeMinimale - pCarrefour.tempsPhase > 0 else 0
+                
+            elif origine.type == 'interphase':
+                self.listePhases = [origine.phaseDestination]
+                self.sommeMin = origine.duree - pCarrefour.tempsPhase + origine.phaseDestination.dureeMinimale
+                
+            self.comptagesCodes = {}
+            for code in pCarrefour.codesPriorite:
+                self.comptagesCodes[code] = 0
+            
+            self.comptagesCodes[self.listePhases[0].codePriorite] += 1
+            
     def append(self, phase):
         self.listePhases.append(phase)
-        if len(self) == 1:
-            if self.origine.type == 'Phase':
-                self.sommeMin = phase.dureeMinimale - self.carrefour.tempsPhase if phase.dureeMinimale - self.carrefour.tempsPhase > 0 else 0
-                self.sommeNom = phase.dureeNominale - self.carrefour.tempsPhase if phase.dureeNominale - self.carrefour.tempsPhase > 0 else 0
-                self.sommeMax = phase.dureeMaximale - self.carrefour.tempsPhase if phase.dureeMaximale - self.carrefour.tempsPhase > 0 else 0
-            elif self.origine.type == 'Interphase':
-                self.sommeMin = self.origine.duree - self.carrefour.tempsPhase + phase.dureeMinimale
-                self.sommeNom = self.origine.duree - self.carrefour.tempsPhase + phase.dureeNominale
-                self.sommeMax = self.origine.duree - self.carrefour.tempsPhase + phase.dureeMaximale             
-        else:
-            self.sommeMin += self.carrefour.matriceInterphase[self.listePhases[-2].numero][self.listePhases[-1].numero].duree
-            self.sommeNom += self.carrefour.matriceInterphase[self.listePhases[-2].numero][self.listePhases[-1].numero].duree
-            self.sommeMax += self.carrefour.matriceInterphase[self.listePhases[-2].numero][self.listePhases[-1].numero].duree
-            
-            self.sommeMin += phase.dureeMinimale
-            self.sommeNom += phase.dureeNominale
-            self.sommeMax += phase.dureeMaximale
-    
-    def delaiMinimal(self):
-        # Caso especial de ja começar na fase final
-        if self.origine.type == 'Phase' and len(self) == 1:
-            return 0
-        else:
-            return self.sommeMin - self.listePhases[-1].dureeMinimale
-    
-    def delaiNominal(self):
-        if self.listePhases[-1].exclusive:
-            instantOuverture = 0
-        else:
-            instantOuverture = (self.listePhases[-1].dureeNominale - self.listePhases[-1].dureeBus)//2
-                
-        # Caso especial de ja começar na fase final
-        if self.origine.type == 'Phase' and len(self) == 1:
-            return instantOuverture - self.carrefour.tempsPhase
         
-        else:
-            return self.sommeNom - (self.listePhases[-1].dureeNominale - instantOuverture)
+        self.sommeMin += self.carrefour.matriceInterphase[self.listePhases[-2].numero][self.listePhases[-1].numero].duree
+        self.sommeMin += phase.dureeMinimale  
     
-    def delaiMaximal(self):
-        instantOuverture = self.listePhases[-1].dureeMaximale - self.listePhases[-1].dureeMaxBus
+        self.comptagesCodes[phase.codePriorite] += 1
         
-        # Caso especial de ja começar na fase final
-        if self.origine.type == 'Phase' and len(self) == 1:
-            return instantOuverture - self.carrefour.tempsPhase if instantOuverture - self.carrefour.tempsPhase > 0 else 0
-        else:
-            return self.sommeMax - self.listePhases[-1].dureeMaxBus
-    
-    def deviation(self):
-        deviationTotale = self.carrefour.delaiApproche - self.delaiNominal()
-        return abs(deviationTotale)
-    
-    def calcDureesIdeales(self):
-        if self.listePhases[-1].exclusive:
-            instantOuverture = 0
-        else:
-            instantOuverture = (self.listePhases[-1].dureeNominale - self.listePhases[-1].dureeBus)//2
-                
-        # deltaTotal é o quanto se tem que aumentar a duraçao do caminho em relacao ao que se faria no modo sem prioridade
-        deltaTotal =  zoneMorte(self.carrefour.delaiApproche - self.delaiNominal(), instantOuverture - (self.listePhases[-1].dureeMaxBus - self.listePhases[-1].dureeBus))
-        
-        minDurees = [phase.dureeMinimale for phase in self.listePhases]
-        if self.carrefour.phaseActuelle.type == 'Phase' and self.carrefour.tempsPhase > minDurees[0]:
-            minDurees[0] = self.carrefour.tempsPhase
-            
-        nomDurees = [phase.dureeNominale for phase in self.listePhases]
-                    
-        maxDurees = [phase.dureeMaximale for phase in self.listePhases]
-        
-        minDurees[-1] = nomDurees[-1] # Nao permite encolher a ultima fase nunca
-        if self.listePhases[-1].exclusive:
-            maxDurees[-1] = nomDurees[-1] # Nao permite aumentar a ultima fase se for exclusiva
-        
-        durees = nomDurees.copy()
-        # Caso ja tenha ultrapassado o nominal da fase
-        if self.carrefour.phaseActuelle.type == 'Phase' and self.carrefour.tempsPhase > nomDurees[0]:
-            if len(self) > 1: # Nao faz a correçao se ja estiver na ultima fase
-                durees[0] = self.carrefour.tempsPhase
-        
-        if (deltaTotal > 0):
-            for i in range(deltaTotal):
-                rapports = [nominal/(duree+1) if duree < maximal else 0 \
-                            for duree,nominal,maximal in zip(durees, nomDurees, maxDurees)]
-                if max(rapports) > 0:
-                    durees[np.argmax(rapports)] += 1
-        elif (deltaTotal < 0):
-            for i in range(-deltaTotal):
-                rapports = [(duree-1)/nominal if duree > minimal else 0 \
-                            for duree,nominal,minimal in zip(durees, nomDurees, minDurees)]
-                if max(rapports) > 0:
-                    durees[np.argmax(rapports)] -= 1
-        
-        self.listeDurees = durees        
-    
-    def durees(self):
-        if not self.listeDurees: # se estiver vazia
-            self.calcDureesIdeales()
-        
-        return self.listeDurees
-    
-    def calcTempsRouge(self):
-        tempsRouge = [ligne.compteurRouge for ligne in self.carrefour.listeLignes]
-        
-        for ligne in self.carrefour.listeLignes:
-            # Somente trata as linhas fechadas
-            if ligne.solicitee and ligne.couleur == 'red':
-                # Inicialização para distinguir se começa em fase ou em interfase
-                if self.origine.type == 'Phase':
-                    tempsRouge[ligne.numero] -= self.carrefour.tempsPhase
-                elif self.origine.type == 'Interphase':
-                    tempsRouge[ligne.numero] += self.origine.duree - self.carrefour.tempsPhase
-               
-                # Acumula os tempos de vermelho durante a execução do plano
-                for phase1,phase2,duree in zip(self.listePhases,self.listePhases[1:],self.durees()):
-                    if phase1.lignesActives[ligne.numero] == True:
-                        break
-                    tempsRouge[ligne.numero] += duree
-                    tempsRouge[ligne.numero] += self.carrefour.matriceInterphase[phase1.numero][phase2.numero].duree
-                
-                # Acumula os tempos de vermelho durante as fases do ciclo base caso a linha não tenha aberto durante a execução do plano
-                else:
-                    phase1 = self.listePhases[-1]
-                    while not phase1.lignesActives[ligne.numero]:
-                        phase2 = suivant(phase1, self.carrefour.listePhases)
-                        while not phase2.solicitee:
-                            phase2 = suivant(phase2, self.carrefour.listePhases)
-                        tempsRouge[ligne.numero] += phase1.dureeNominale
-                        tempsRouge[ligne.numero] += self.carrefour.matriceInterphase[phase1.numero][phase2.numero].duree
-                        
-                        phase1 = phase2
-#                # Desconta os segundos de verde da interfase
-#                tempsRouge[ligne.numero] -= (self.carrefour.matriceInterphase[phase1.numero][phase2.numero].duree\
-#                          - self.carrefour.matriceInterphase[phase1.numero][phase2.numero].tempsChangement[ligne.numero])
-        self.tempsRouge =  tempsRouge
-    
-    def maxRouge(self):
-        if not self.tempsRouge: # se ainda nao tiver calculado
-            self.calcTempsRouge()
-        
-        return max(self.tempsRouge)
-    
-    def getPlan(self):
-        plan = []
-        for phase,duree in zip(self.listePhases, self.durees()):
-            if phase in plan:
-                break
-            phase.duree = duree
-            plan.append(phase)
-        return plan
-    
     def copy(self):
-        return Chemin(self.origine, self.carrefour, self.listePhases.copy(), self.sommeMin, self.sommeNom, self.sommeMax)
+        return Chemin(self.carrefour, self.listePhases.copy(), self.sommeMin, self.comptagesCodes.copy())
     
     def __len__(self):
         return len(self.listePhases)
     
     def __str__(self):
-        strPhases = str(self.listePhases)
-        strDureesNominales = str([phase.dureeNominale for phase in self.listePhases])
-        strDurees = str(self.durees())
-        strDelais = str(self.delaiMinimal()) + ' ' + str(self.delaiNominal()) + ' ' + str(self.delaiMaximal())
-        strDeviation = 'Deviation: ' + str(self.deviation())
-        strTemps = 'Temps Rouge Max: ' + str(self.maxRouge())
-        
-        return strPhases + '\n' + strDureesNominales + '\n' + strDurees + '\n' + strDelais + '\n' + strDeviation + '\n' + strTemps
+        strPhases = str(self.listePhases) + '\n'
+#        strScore = 'Score: ' + str(self.score) + '\n'
+        strDurees = 'Durees: ' + str(self.durees) + '\n'
+        strDeviations = 'Deviations: ' + str(self.deviations) + '\n'
+        strRetards = 'Retards: ' + str(self.retards)
+        return strPhases + strDurees + strDeviations + strRetards
     __repr__ = __str__
-    
     
     
 class Graphe:
@@ -210,126 +63,347 @@ class Graphe:
         self.listeSommets = pSommets
         self.listeChemins = []
 
-    def chemins(self, origine, destination, carrefour, delaiApproche):
-        cheminBase = Chemin(origine, carrefour, [])
-        if origine.type == 'Interphase':
-            origine = origine.phaseDestination
+    def chemins(self, carrefour):
+        cheminBase = Chemin(carrefour)
+
+        self.rechercheRecursive(cheminBase, carrefour.demandesPriorite)
         
-        if origine in self.listeSommets:
-            self.rechercheChemins(origine, destination, cheminBase, delaiApproche)
         chemins = self.listeChemins
         self.listeChemins = []
         
         return chemins
 
-    def rechercheChemins(self, origine, destination, chemin, delaiApproche):
-        chemin.append(origine)
-        arreter = False
+    def rechercheRecursive(self, chemin, demandesPriorite):
+#        print('')
+#        print(chemin.listePhases)
+#        print(chemin.comptagesCodes)
+        codesDemandes = {demande.codePriorite for demande in demandesPriorite}
+        maxDelai = max([demande.delaiApproche for demande in demandesPriorite])
         
-        if origine == destination:
-            self.listeChemins.append(chemin)
-            
-        # Condiçoes de parada    
-        if origine.escamotable:
-            if origine.prioritaire and origine.exclusive: # PEE
-                if len(chemin) > 1:
-                    arreter = True
-            else: # PENE ou ESC
-                if origine in self.listeChemins[:-1]: # Ja adicionada antes
-                    arreter = True
-        elif chemin.sommeMin >= delaiApproche and len(chemin) >= len(self.listeSommets): # Caminho muito longo sem chegar no destino
-            arreter = True
+        comptagesCodes = {}
+        for code in chemin.carrefour.codesPriorite:
+            comptagesCodes[code] = len([demande for demande in demandesPriorite if demande.codePriorite == code])
+    
+        # Testa para ver se o caminho é aceitavel
+        if chemin.listePhases[-1].codePriorite in codesDemandes: # Se a ultima fase foi demandada
+            for code in codesDemandes:
+                if chemin.comptagesCodes[code] == 0:
+#                    print('Caminho nao aceitavel; fases insuficientes com codigo', code)
+                    break
+            else: # Se para todos os codigos demandados existe pelo menos uma fase no caminho
+#                print('Caminho aceitavel')
+                self.listeChemins.append(chemin)
+#        else:
+#            print('Caminho nao aceitavel; fase final nao demandada')
         
-        if not arreter:
-            i = self.listeSommets.index(origine)
+        # Verifica se chegou no fim do galho
+#        print('Min', chemin.sommeMin)
+        
+        if chemin.sommeMin < maxDelai or len(chemin) < len(self.listeSommets): # Continua a busca
+#            print('Nao chegou no fim do galho')
+            i = self.listeSommets.index(chemin.listePhases[-1])
             enfants = [sommet for j,sommet in enumerate(self.listeSommets) if self.matrice[i,j] == 1]
+#            print('Enfants:', enfants)
+            
             for sommet in enfants:
-                self.rechercheChemins(sommet, destination, chemin.copy(), delaiApproche)
-        
+                # Verififica se a transicao é valida
+                transitionPossible = True
+                if sommet.escamotable:
+                    if not sommet.codePriorite: # ESC
+                        if sommet in chemin.listePhases:
+                            transitionPossible = False
+#                            print(sommet, 'Transicao impossivel: ESC')
+                    elif sommet.exclusive: # PEE (FALTA FAZER IGNORAR A PRIMEIRA FASE)
+                        code = sommet.codePriorite
+                        if chemin.comptagesCodes[code] >= comptagesCodes[code]:
+                            transitionPossible = False
+#                            print(sommet, 'Transicao impossivel: PEE')
+                    else: #PENE
+                        pass # ESCREVER ESSE PEDACO
+                        
+                if transitionPossible:
+#                    print(sommet, 'Transicao possivel')
+                    cheminDerive = chemin.copy()
+                    cheminDerive.append(sommet)
+                    self.rechercheRecursive(cheminDerive, demandesPriorite)
+#        else:
+#            print('Chegou no fim do galho')
 
-def meilleurChemin(carrefour):
-    # Intervalo de atrasos considerado
-    intervalleRetard = 15
-    
-    listeChemins = []
-    
-    listePhasesPrioritaires = [phase for phase in carrefour.listePhases if phase.prioritaire]
-    for phasePrioritaire in listePhasesPrioritaires:
-        i = carrefour.listePhases.index(phasePrioritaire)
-        destinations = [phase for j,phase in enumerate(carrefour.listePhases) if carrefour.matriceGraphe[i,j] == 1]
+class constraintsMatrix:
+    def __init__(self, M=1000):
+        self.ia = intArray(1+M)
+        self.ja = intArray(1+M)
+        self.ar = doubleArray(1+M)
+        self.N = 0
+        self.M = M
         
-        # Se pelo menos uma das possiveis fases destino for solicitada
-        if any(phase.solicitee for phase in destinations):
-            sommets = [phase for phase in carrefour.listePhases if phase in carrefour.cycleBase or phase == phasePrioritaire]
-            numeroSommets = [sommet.numero for sommet in sommets]
-            matriceSubgraphe = carrefour.matriceGraphe[numeroSommets,:][:, numeroSommets]
-            subgraphe = Graphe(matriceSubgraphe, sommets)
-            
-            listeChemins += subgraphe.chemins(carrefour.phaseActuelle, phasePrioritaire, carrefour, carrefour.delaiApproche)
-            
+    def add(self, i, j, x):
+        if self.N < self.M:
+            self.N += 1
+            self.ia[self.N] = i
+            self.ja[self.N] = j
+            self.ar[self.N] = x
+                
+    def load(self, lp):
+        glp_load_matrix(lp, self.N, self.ia, self.ja, self.ar)
+        
+    def __str__(self):
+        string = ''
+        for i in range(self.N):
+            string += str(self.ia[i+1]) + ' ' + str(self.ja[i+1]) + ' ' + str(self.ar[i+1]) + '\n'
+        string += 'N = ' + str(self.N)
+        return string
+
+def glp_print_col(lp, j):
+    lb = glp_get_col_lb(lp, j)
+    ub = glp_get_col_ub(lp, j)
+    name = glp_get_col_name(lp, j)
+    print(lb, '<=', name, '<=', ub)
+    
+def glp_print_row(lp, i):
+    n = glp_get_num_cols(lp)
+    ind = intArray(n+1)
+    val = doubleArray(n+1)
+    glp_get_mat_row(lp, i, ind, val)
+    
+    string = ''
+    for k in range(n):
+        if ind[k+1] == 0:
+            break
+        name = glp_get_col_name(lp, ind[k+1])
+        if string == '':
+            string += str(val[k+1]) + '*' + name
+        else:
+            string += ' + ' + str(val[k+1]) + '*' + name
+    
+    if string == '':
+        string += '0'
+    
+    rowType = glp_get_row_type(lp, i)
+    typeDict = {GLP_LO:' >= ', GLP_UP:' <= ', GLP_FX:' = '}
+    if rowType in typeDict:
+        string += typeDict[rowType]
+        
+        if rowType == GLP_LO:
+            b = str(glp_get_row_lb(lp, i))
+        else:
+            b = str(glp_get_row_ub(lp, i))
+        string += b
+    
+    name = glp_get_row_name(lp, i)
+    if name == None:
+        name = ''
+    print(name + ' : ' + string)
+
+
+def analyseSimplex(listeChemins, carrefour):
     cheminsPossibles = []
-    cheminsLongs = [] # min > delaiApproche
-     
-    for chemin in listeChemins:
-        if carrefour.delaiApproche <= chemin.delaiMaximal():
-            if carrefour.delaiApproche >= chemin.delaiMinimal():
-                cheminsPossibles.append(chemin)
-            else:
-                cheminsLongs.append(chemin)
-            
-    if cheminsPossibles: # Se nao estiver vazia
-        # Maximo de atraso toleravel para que o caminho continue valido
-        retardsMaximals = [min([chemin.delaiMaximal()-carrefour.delaiApproche, 120-chemin.maxRouge()]) for chemin in cheminsPossibles]
-        
-        # Maior atraso toleravel entre todos os caminhos, com saturação em (intervalleRetard)s
-        couvertureMaximale = min([max(retardsMaximals), intervalleRetard])
-        print(couvertureMaximale)
-        
-        # Lista dos caminhos que cobrem ao máximo intervalo de 15s
-        cheminsRobustes = [chemin for chemin,retard in zip(cheminsPossibles,retardsMaximals) if retard >= couvertureMaximale]
-        
-        # Caso nenhum caminho satisfaça os 120s, a opçao é pegar o que menos ultrapassa
-        # Nesse caso, couvertureMaximale é setado em 0 para que no calculo de deviationsMoyennes seja simplesmente calculada a deviation para retard=0
-        if couvertureMaximale < 0:
-            couvertureMaximale = 0  
-        
-        # Média da deviation entre 0 e couvertureMaximale
-        deviationsMoyennes = [sum([abs(carrefour.delaiApproche + retard - chemin.delaiNominal()) for retard in range(couvertureMaximale+1)])/(couvertureMaximale+1)\
-                              for chemin in cheminsRobustes]
-        
-        meilleurChemin = cheminsRobustes[np.argmin(deviationsMoyennes)]
-        
-        for chemin in cheminsPossibles:
-            print(chemin, end='\n\n')
-        
-#        for chemin,deviation in zip(cheminsRobustes, deviationsMoyennes):
-#            print(chemin)
-#            print('Deviation Moyenne:', deviation, end='\n\n')
-        
-    else:
-        minimums = [chemin.delaiMinimal() for chemin in cheminsLongs]
-        meilleurChemin = cheminsLongs[np.argmin(minimums)]
-        
-    return meilleurChemin
-
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
     
+#    for chemin in listeChemins:
+#        print(chemin.listePhases)
+    
+    for chemin in listeChemins:
+        lp = glp_create_prob() # Cria o objeto do problema LP
+#        glp_set_prob_name(lp, 'problem') # Define o nome do problema
+#        glp_set_obj_name(lp, 'Deviation') # Define o nome da funcao objetivo
+        glp_set_obj_dir(lp, GLP_MIN) # Define se queremos maximizar ou minimizar o objetivo
+          
+        # Add variaveis x
+        colX = glp_add_cols(lp, len(chemin))
+        for i,phase in enumerate(chemin.listePhases):
+            glp_set_col_name(lp, colX+i, 'x'+str(i+1))
+            glp_set_col_bnds(lp, colX+i, GLP_DB, phase.dureeMinimale, phase.dureeMaximale)
+        
+        if carrefour.phaseActuelle.type == 'phase': # Ajusta o LB de x1 caso necessario
+            phase0 = chemin.listePhases[0]
+            if carrefour.tempsPhase > phase0.dureeMinimale:
+                if carrefour.tempsPhase < phase0.dureeMaximale:
+                    glp_set_col_bnds(lp, colX,GLP_DB, carrefour.tempsPhase, phase0.dureeMaximale)
+                else:
+                    glp_set_col_bnds(lp, colX,GLP_FX, carrefour.tempsPhase, carrefour.tempsPhase)
+            
+        # Add variaveis u
+        colU = glp_add_cols(lp, len(chemin))
+        for i,phase in enumerate(chemin.listePhases):
+            glp_set_col_name(lp, colU+i, 'u'+str(i+1))
+            glp_set_col_bnds(lp, colU+i, GLP_LO, 0, 0)
+            if phase.exclusive:
+                glp_set_obj_coef(lp, colU+i, 2)
+            else:
+                glp_set_obj_coef(lp, colU+i, 1)
+        
+        # Add variaveis r
+        colR = glp_add_cols(lp, len(carrefour.demandesPriorite))
+        for i,demande in enumerate(carrefour.demandesPriorite):
+            glp_set_col_name(lp, colR+i, 'r'+str(i+1))
+            glp_set_col_bnds(lp, colR+i, GLP_LO, 0, 0)
+            glp_set_obj_coef(lp, colR+i, 100)
+        
+        # Matriz de restriçoes
+        glp_matrix = constraintsMatrix()
+        
+        # Restricoes de u
+        rowU = glp_add_rows(lp, 2*len(chemin))
+        for i,phase in enumerate(chemin.listePhases):
+            glp_set_row_name(lp, rowU+2*i,'u'+str(i+1)+'eq1')
+            glp_matrix.add(rowU+2*i, colX+i, 1)
+            glp_matrix.add(rowU+2*i, colU+i, -1)
+            glp_set_row_bnds(lp, rowU+2*i, GLP_UP, 0, phase.dureeNominale)
+            
+            glp_set_row_name(lp, rowU+2*i+1,'u'+str(i+1)+'eq2')
+            glp_matrix.add(rowU+2*i+1, colX+i, 1)
+            glp_matrix.add(rowU+2*i+1, colU+i, 1)
+            glp_set_row_bnds(lp, rowU+2*i+1, GLP_LO, phase.dureeNominale, 0)
+        
+        # Restricoes de delai
+        rowV = [0 for k in carrefour.demandesPriorite] # rowV[i] representa a coluna onde comecam as restricoes de delai do veiculo i
+        colH = [0 for k in carrefour.demandesPriorite] # colH[i] representa a coluna onde comecam as variaveis h do veiculo i
+        M = 1000 # Big M
+        
+        # Para cada veiculo
+        for i,demande in enumerate(carrefour.demandesPriorite):
+            P = [index for index,phase in enumerate(chemin.listePhases) if phase.codePriorite == demande.codePriorite]
+
+            # Adiciona as variaveis h
+            colH[i] = glp_add_cols(lp, len(P))
+            rowV[i] = glp_add_rows(lp, 2*len(P)+1)
+                        
+            # Para cada fase em que o veiculo pode passar
+            for j,p in enumerate(P):
+                # Configuracao das variaveis h
+                glp_set_col_name(lp, colH[i]+j, 'h'+str(i+1)+str(j+1))
+                glp_set_col_kind(lp, colH[i]+j, GLP_BV)
+                
+                # Soma das duracoes de interfase
+                sommeInterphases = 0
+                for m in range(p):
+                    phase1 = chemin.listePhases[m]
+                    phase2 = chemin.listePhases[m+1]
+                    sommeInterphases += carrefour.interphase(phase1,phase2).duree
+                if carrefour.phaseActuelle.type == 'interphase':
+                    sommeInterphases += carrefour.phaseActuelle.duree
+                
+                # Equaçao 1
+                glp_set_row_name(lp, rowV[i]+2*j, 'v'+str(i+1)+str(j+1)+'eq1')
+                for m in range(p):
+                    glp_matrix.add(rowV[i]+2*j, colX+m, 1)
+                glp_matrix.add(rowV[i]+2*j, colR+i, -1)
+                glp_matrix.add(rowV[i]+2*j, colH[i]+j, M)
+                b = demande.delaiApproche + carrefour.tempsPhase - sommeInterphases
+                glp_set_row_bnds(lp, rowV[i]+2*j, GLP_UP, 0, float(b+M))
+                
+                # Equaçao 2
+                glp_set_row_name(lp, rowV[i]+2*j+1, 'v'+str(i+1)+str(j+1)+'eq2')
+                for m in range(p+1):
+                    glp_matrix.add(rowV[i]+2*j+1, colX+m, 1)
+                glp_matrix.add(rowV[i]+2*j+1, colR+i, -1)
+                glp_matrix.add(rowV[i]+2*j+1, colH[i]+j, -M)
+                b = demande.delaiApproche + carrefour.tempsPhase - sommeInterphases
+                glp_set_row_bnds(lp, rowV[i]+2*j+1, GLP_LO, float(b+chemin.listePhases[p].dureeBus-M), 0)
+                
+            # Equaçao Final
+            glp_set_row_name(lp, rowV[i]+2*len(P), 'v'+str(i+1)+'sum')
+            for m in range(len(P)):
+                glp_matrix.add(rowV[i]+2*len(P), colH[i]+m, 1)
+            glp_set_row_bnds(lp, rowV[i]+2*len(P), GLP_FX, 1, 1)
+        
+        # Pelo menos um veiculo por fase exclusiva (exceto na primeira)
+        phasesExclusives = [index for index,phase in enumerate(chemin.listePhases) if phase.exclusive and index > 0]
+        
+        if phasesExclusives: # Se a lista nao for vazia 
+            rowE = glp_add_rows(lp, len(phasesExclusives))      
+            for m,p in enumerate(phasesExclusives):
+                glp_set_row_name (lp, rowE+m, 'e'+str(m+1))
+                k = chemin.listePhases[p].codePriorite
+                # Todas as posicoes de fases com esse codigo
+                P = [index for index,phase in enumerate(chemin.listePhases) if phase.codePriorite == k]
+                # Indice da fase exclusiva na lista P
+                j = P.index(p)
+                
+                # Para cada veiculo com o mesmo codigo da fase
+                for i,demande in enumerate(carrefour.demandesPriorite):
+                    if demande.codePriorite == k:
+                        glp_matrix.add(rowE+m, colH[i]+j, 1)
+                glp_set_row_bnds(lp, rowE+m, GLP_LO, 1, 0)
+        
+        # Pelo menos um veiculo na ultima fase
+        if not chemin.listePhases[-1].exclusive:
+            rowL = glp_add_rows(lp, 1)
+            glp_set_row_name (lp, rowL, 'last')
+            
+            N = len(chemin)-1
+            k = chemin.listePhases[N].codePriorite
+            # Todas as posicoes de fases com esse codigo
+            P = [index for index,phase in enumerate(chemin.listePhases) if phase.codePriorite == k]
+            # Indice da fase exclusiva na lista P
+            j = P.index(N)
+            
+            # Para cada veiculo com o mesmo codigo da fase
+            for i,demande in enumerate(carrefour.demandesPriorite):
+                if demande.codePriorite == k:
+                    glp_matrix.add(rowL, colH[i]+j, 1)
+            glp_set_row_bnds(lp, rowL, GLP_LO, 1, 0)
+                             
+        
+        # Carrega matriz de restriçoes
+        glp_matrix.load(lp) 
+        
+        # Print restriçoes
+#        print(chemin.listePhases)
+#        for j in range(glp_get_num_cols(lp)):
+#            glp_print_col(lp, j+1)
+#        for i in range(glp_get_num_rows(lp)):
+#            glp_print_row(lp, i+1)
+#        print('')
+        
+        # Resolve o problema
+        parm = glp_iocp()
+        glp_init_iocp(parm)
+        parm.presolve = GLP_ON
+        glp_intopt(lp, parm)
+        
+        # Leitura variaveis
+        status = glp_mip_status(lp)
+    
+        if status == GLP_OPT:
+            chemin.score = round(glp_mip_obj_val(lp))
+            chemin.durees = [round(glp_mip_col_val(lp, colX+i)) for i in range(len(chemin))]
+            chemin.deviations = [round(glp_mip_col_val(lp, colU+i)) for i in range(len(chemin))]
+            chemin.retards = [round(glp_mip_col_val(lp, colR+j)) for j in range(len(carrefour.demandesPriorite))]
+            cheminsPossibles.append(chemin)
+                
+        # Fim
+        glp_delete_prob(lp)
+
+    return cheminsPossibles
 
 
+def cheminPrioritaire(carrefour):
+    tBegin = time.time()
+    
+    sommets = [phase for phase in carrefour.listePhases if phase.solicitee or phase.codePriorite]
+    numeroSommets = [sommet.numero for sommet in sommets]
+    matriceSubgraphe = carrefour.matriceGraphe[numeroSommets,:][:, numeroSommets]
+    
+    subgraphe = Graphe(matriceSubgraphe, sommets)
+    
+    listeChemins = subgraphe.chemins(carrefour)
+    
+    cheminsPossibles = analyseSimplex(listeChemins, carrefour)
+    
+    tEnd = time.time()
 
+    scores = [chemin.score for chemin in cheminsPossibles]
+    meilleurChemin = cheminsPossibles[np.argmin(scores)]
+    
+    print('Meilleur chemin:', meilleurChemin)
+    print('Caminhos analisados: ', len(listeChemins))
+    print('Tempo (ms):', 1000*(tEnd-tBegin))
+    print('')
+    
+    dureeActuelle = meilleurChemin.durees[0]
+    phaseProchaine = meilleurChemin.listePhases[1] if len(meilleurChemin) > 1 else None
+    
+    return (dureeActuelle, phaseProchaine)    
+    
+    
