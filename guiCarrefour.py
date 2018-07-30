@@ -18,6 +18,7 @@ class AppIntersection(tk.Frame):
         self.frameEscamotable = tk.Frame(self)
         self.buttonsPhase = [tk.Button(self.frameEscamotable, text='Phase '+str(i), command=lambda i=i:self.soliciterPhase(i)) \
                          for i,phase in enumerate(self.carrefour.listePhases) if phase.escamotable and not phase.codePriorite]
+        self.labelPhase = [tk.Label(self.frameEscamotable, text='') for phase in self.carrefour.listePhases if phase.escamotable and not phase.codePriorite]
         
         self.framePriorite = tk.Frame(self)
         self.entriesDelai = [tk.Entry(self.framePriorite, width=15) for i in range(len(self.codes)*self.vehiculesParCode)]

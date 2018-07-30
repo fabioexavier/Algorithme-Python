@@ -79,7 +79,7 @@ class DemandePriorite:
         self.codeVehicule = pCodeVehicule
         
     def __str__(self):
-        return str((self.delaiApproche,self.codePriorite,self.codeVehicule))
+        return str((self.delaiApproche,self.codePriorite))
     __repr__ = __str__
 
 class Carrefour:
@@ -120,11 +120,14 @@ class Carrefour:
         
         for phaseActuelle in self.listePhases:
             phaseSuivante = suivant(phaseActuelle, self.listePhases)
-            matrice[phaseActuelle.numero][phaseSuivante.numero] = 1
-            
+            # Nao autorisa uma transiçao entre duas fases exclusivas
+            if not (phaseActuelle.exclusive and phaseSuivante.exclusive):
+                matrice[phaseActuelle.numero][phaseSuivante.numero] = 1
+                
             while phaseSuivante.escamotable and suivant(phaseSuivante, self.listePhases) != phaseActuelle:
                 phaseSuivante = suivant(phaseSuivante, self.listePhases)
-                matrice[phaseActuelle.numero][phaseSuivante.numero] = 1
+                if not (phaseActuelle.exclusive and phaseSuivante.exclusive):
+                    matrice[phaseActuelle.numero][phaseSuivante.numero] = 1
                     
         return matrice
     

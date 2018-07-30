@@ -1,7 +1,12 @@
-import gestionIntersections as gi
 import numpy as np
 from swiglpk import *
 import time
+
+def suivant(element, liste):
+    index = liste.index(element) + 1
+    if index == len(liste):
+        index = 0
+    return liste[index]
 
 class Chemin:
     def __init__(self, pCarrefour, pListePhases=None, pSommeMin=0, pComptagesCodes=None):
@@ -113,10 +118,15 @@ class Graphe:
                         if sommet in chemin.listePhases:
                             transitionPossible = False
 #                            print(sommet, 'Transicao impossivel: ESC')
-                    elif sommet.exclusive: # PEE (FALTA FAZER IGNORAR A PRIMEIRA FASE)
+                    elif sommet.exclusive: # PEE
                         code = sommet.codePriorite
-                        if chemin.comptagesCodes[code] >= comptagesCodes[code]:
-                            transitionPossible = False
+                        # Nao contabiliza a primeira fase caso ela possua o mesmo codigo da fase que queremos adicionar
+                        if chemin.listePhases[0].codePriorite == code:
+                            if chemin.comptagesCodes[code]-1 >= comptagesCodes[code]:
+                                transitionPossible = False
+                        else:
+                            if chemin.comptagesCodes[code] >= comptagesCodes[code]:
+                                transitionPossible = False
 #                            print(sommet, 'Transicao impossivel: PEE')
                     else: #PENE
                         pass # ESCREVER ESSE PEDACO
@@ -328,7 +338,7 @@ def analyseSimplex(listeChemins, carrefour):
         
         # Pelo menos um veiculo na ultima fase
         if not chemin.listePhases[-1].exclusive:
-            rowL = glp_add_rows(lp, 1)
+            rowLast = glp_add_rows(lp, 1)
             glp_set_row_name (lp, rowL, 'last')
             
             N = len(chemin)-1
@@ -341,10 +351,51 @@ def analyseSimplex(listeChemins, carrefour):
             # Para cada veiculo com o mesmo codigo da fase
             for i,demande in enumerate(carrefour.demandesPriorite):
                 if demande.codePriorite == k:
-                    glp_matrix.add(rowL, colH[i]+j, 1)
-            glp_set_row_bnds(lp, rowL, GLP_LO, 1, 0)
+                    glp_matrix.add(rowLast, colH[i]+j, 1)
+            glp_set_row_bnds(lp, rowLast, GLP_LO, 1, 0)
                              
-        
+        # Restriçoes de 120s
+        # OBS: Hipotese de que o algoritmo de prioridade somente é chamado durante fases (nunca interfase)
+        for ligne in carrefour.listeLignes:
+            if ligne.couleur == 'red' and ligne.solicitee():
+                rowLigne = glp_add_rows(lp, 1)
+                glp_set_row_name(lp, rowLigne, ligne.nom)
+                
+                sommeInterphases = 0
+                sommeNominaux = 0
+                
+                index = 0
+                # Se len(chemin) == 1, index permanece 0 e o for nao é executado
+                for index in range(1, len(chemin)):
+                    phase1 = chemin.listePhases[index-1]
+                    phase2 = chemin.listePhases[index]
+                    sommeInterphases += carrefour.interphase(phase1, phase2).duree
+                    # Se a linha esta aberta nessa fase
+                    if phase2.lignesActives[ligne.numero] == True:
+                        break
+                else: # Se chegou ate o fim do caminho sem encontrar uma fase com a linha aberta
+                    phase1 = chemin.listePhases[index]
+                    phase2 = suivant(phase1, carrefour.listePhases)
+                    while not phase2.solicitee:
+                        phase2 = suivant(phase2, carrefour.listePhases)
+                    sommeInterphases += carrefour.interphase(phase1, phase2).duree
+                    index += 1
+                    
+                    while not phase2.lignesActives[ligne.numero] == True:
+                        phase1 = phase2
+                        phase2 = suivant(phase1, carrefour.listePhases)
+                        while not phase2.solicitee:
+                            phase2 = suivant(phase2, carrefour.listePhases)
+                        sommeNominaux += phase1.dureeNominale
+                        sommeInterphases += carrefour.interphase(phase1, phase2).duree
+                
+                for i in range(index):
+                    glp_matrix.add(rowLigne, colX+i, 1)
+                    
+                b = 120 - ligne.compteurRouge + carrefour.tempsPhase - sommeInterphases - sommeNominaux
+                glp_set_row_bnds(lp, rowLigne, GLP_UP, 0, float(b))
+                        
+                    
         # Carrega matriz de restriçoes
         glp_matrix.load(lp) 
         
@@ -391,14 +442,14 @@ def cheminPrioritaire(carrefour):
     
     cheminsPossibles = analyseSimplex(listeChemins, carrefour)
     
-    tEnd = time.time()
-
     scores = [chemin.score for chemin in cheminsPossibles]
     meilleurChemin = cheminsPossibles[np.argmin(scores)]
     
+    tEnd = time.time()
+    
     print('Meilleur chemin:', meilleurChemin)
-    print('Caminhos analisados: ', len(listeChemins))
-    print('Tempo (ms):', 1000*(tEnd-tBegin))
+    print('Chemins analisés: ', len(listeChemins))
+    print('Temps (ms):', 1000*(tEnd-tBegin))
     print('')
     
     dureeActuelle = meilleurChemin.durees[0]
