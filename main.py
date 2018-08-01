@@ -47,12 +47,12 @@ listeLignes = [gi.LigneDeFeu(0, 'T1', 'voiture', 3, 1),   \
                gi.LigneDeFeu(10, 'F4', 'voiture', 3, 0), \
                gi.LigneDeFeu(11, 'P10', 'pieton', 0, 0)]
 
-listePhases = [gi.Phase(0, [False, False, True, True, False, True, False, False, True, True, False, True], 10, 54, 80, False, 0, False, 0), \
-               gi.Phase(1, [True, True, False, False, True, False, True, False, True, True, False, True], 3, 3, 20, True, 1, True, 3),      \
-               gi.Phase(2, [False, False, True, False, True, False, True, False, False, False, True, False], 6, 6, 20, True, 0, False, 0),    \
-               gi.Phase(3, [True, True, False, False, True, False, True, False, True, True, False, True], 3, 3, 20, True, 1, True, 3),      \
-               gi.Phase(4, [False, False, True, False, True, False, True, True, False, False, False, True], 10, 17, 40, False, 0, False, 0),\
-               gi.Phase(5, [True, True, False, False, True, False, True, False, True, True, False, True], 3, 3, 20, True, 1, True, 3)]
+listePhases = [gi.Phase(0, [False, False, True, True, False, True, False, False, True, True, False, True], 10, 54, 80, False, 0, False, 0, -1), \
+               gi.Phase(1, [True, True, False, False, True, False, True, False, True, True, False, True], 3, 3, 30, True, 1, True, 3, 15),      \
+               gi.Phase(2, [False, False, True, False, True, False, True, False, False, False, True, False], 6, 6, 30, True, 0, False, 0, -1),    \
+               gi.Phase(3, [True, True, False, False, True, False, True, False, True, True, False, True], 3, 3, 30, True, 1, True, 3, 15),      \
+               gi.Phase(4, [False, False, True, False, True, False, True, True, False, False, False, True], 10, 17, 40, False, 0, False, 0, -1),\
+               gi.Phase(5, [True, True, False, False, True, False, True, False, True, True, False, True], 3, 3, 30, True, 1, True, 3, 15)]
 
 matriceSecurite = [[0,0,5,0,0,2,0,0,0,0,2,0],   \
                    [0,0,1,0,0,2,0,0,0,0,2,0],   \

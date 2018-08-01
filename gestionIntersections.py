@@ -8,7 +8,7 @@ def suivant(element, liste):
     return liste[index]
 
 class Phase:   
-    def __init__(self, pNumero, pLignesActives, pMin, pNom, pMax, pEscamotable, pCodePriorite, pExclusive, pDureeBus):
+    def __init__(self, pNumero, pLignesActives, pMin, pNom, pMax, pEscamotable, pCodePriorite, pExclusive, pDureeBus, pIntervalle):
         self.numero = pNumero
         self.lignesActives = pLignesActives
         
@@ -21,6 +21,7 @@ class Phase:
         self.codePriorite = pCodePriorite
         self.exclusive = pExclusive
         self.dureeBus = pDureeBus
+        self.intervalle = pIntervalle
         
         self.type = 'phase'
     

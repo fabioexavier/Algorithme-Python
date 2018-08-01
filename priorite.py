@@ -104,7 +104,11 @@ class Graphe:
         # Verifica se chegou no fim do galho
 #        print('Min', chemin.sommeMin)
         
-        if chemin.sommeMin < maxDelai or len(chemin) < len(self.listeSommets): # Continua a busca
+        # enoughPhases indica se existe pelo menos uma fase distinta possivel no caminho para cada demanda
+#        enoughPhases = all((chemin.comptagesCodes[code] >= comptagesCodes[code]) for code in codesDemandes)
+#        maxLen = max(comptagesCodes.values())*len(self.listeSommets)
+        maxLen = 1*len(self.listeSommets)
+        if chemin.sommeMin < maxDelai or len(chemin) <= maxLen: # Continua a busca
 #            print('Nao chegou no fim do galho')
             i = self.listeSommets.index(chemin.listePhases[-1])
             enfants = [sommet for j,sommet in enumerate(self.listeSommets) if self.matrice[i,j] == 1]
@@ -128,7 +132,7 @@ class Graphe:
                             if chemin.comptagesCodes[code] >= comptagesCodes[code]:
                                 transitionPossible = False
 #                            print(sommet, 'Transicao impossivel: PEE')
-                    else: #PENE
+                    else: # PENE
                         pass # ESCREVER ESSE PEDACO
                         
                 if transitionPossible:
@@ -395,7 +399,33 @@ def analyseSimplex(listeChemins, carrefour):
                 b = 120 - ligne.compteurRouge + carrefour.tempsPhase - sommeInterphases - sommeNominaux
                 glp_set_row_bnds(lp, rowLigne, GLP_UP, 0, float(b))
                         
-                    
+        # Restriçoes de intervalo entre veiculos
+        for i,phase in enumerate(chemin.listePhases):
+            if phase.exclusive and phase.intervalle >= 0: # Se a fase é exclusiva e esta definido um intervalo maximo entre veiculos nela
+                k = phase.codePriorite
+                Pk = [index for index,phase in enumerate(chemin.listePhases) if phase.codePriorite == k]
+                j = Pk.index(i)
+                for m,demandeM in enumerate(carrefour.demandesPriorite): # Para cada par de veiculos distintos com o mesmo codigo da fase
+                    if demandeM.codePriorite == k:
+                        for n,demandeN in enumerate(carrefour.demandesPriorite[m+1:],m+1):
+                            if demandeN.codePriorite == k:
+                                row = glp_add_rows(lp, 2)
+                                b = float(phase.intervalle + phase.dureeBus + 2*M)
+                                
+                                glp_set_row_name(lp, row, 'p'+str(i)+'v'+str(m+1)+'v'+str(n+1)+'eq1')
+                                glp_matrix.add(row, colR+m, 1)
+                                glp_matrix.add(row, colR+n, -1)
+                                glp_matrix.add(row, colH[m]+j, M)
+                                glp_matrix.add(row, colH[n]+j, M)
+                                glp_set_row_bnds(lp, row, GLP_UP, 0, b-demandeM.delaiApproche+demandeN.delaiApproche)
+                                
+                                glp_set_row_name(lp, row+1, 'p'+str(i)+'v'+str(m+1)+'v'+str(n+1)+'eq2')
+                                glp_matrix.add(row+1, colR+m, -1)
+                                glp_matrix.add(row+1, colR+n, 1)
+                                glp_matrix.add(row+1, colH[m]+j, M)
+                                glp_matrix.add(row+1, colH[n]+j, M)
+                                glp_set_row_bnds(lp, row+1, GLP_UP, 0, b+demandeM.delaiApproche-demandeN.delaiApproche)
+                        
         # Carrega matriz de restriçoes
         glp_matrix.load(lp) 
         
