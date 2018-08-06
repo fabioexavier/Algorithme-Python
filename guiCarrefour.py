@@ -16,9 +16,14 @@ class AppIntersection(tk.Frame):
         self.buttonPause = tk.Button(self, text='Pause', command = self.pauser)
         
         self.frameEscamotable = tk.Frame(self)
-        self.buttonsPhase = [tk.Button(self.frameEscamotable, text='Phase '+str(i), command=lambda i=i:self.soliciterPhase(i)) \
-                         for i,phase in enumerate(self.carrefour.listePhases) if phase.escamotable and not phase.codePriorite]
-        self.labelPhase = [tk.Label(self.frameEscamotable, text='') for phase in self.carrefour.listePhases if phase.escamotable and not phase.codePriorite]
+        self.commandesEscamotables = [CommandeEscamotable(self.frameEscamotable, phase, lambda i=phase.numero:self.soliciterPhase(i)) \
+                                     for phase in self.carrefour.listePhases if phase.escamotable and not phase.codePriorite]
+        
+#        self.buttonsPhase = [tk.Button(self.frameEscamotable, text='Phase '+str(i), command=lambda i=i:self.soliciterPhase(i)) \
+#                         for i,phase in enumerate(self.carrefour.listePhases) if phase.escamotable and not phase.codePriorite]
+#        self.stringsPhase = [tk.stringVar() for button in self.buttonsPhase]
+#        self.labelsPhase = [tk.Label(self.frameEscamotable, text='o') for phase in self.carrefour.listePhases if phase.escamotable and not phase.codePriorite]
+        
         
         self.framePriorite = tk.Frame(self)
         self.entriesDelai = [tk.Entry(self.framePriorite, width=15) for i in range(len(self.codes)*self.vehiculesParCode)]
@@ -32,8 +37,9 @@ class AppIntersection(tk.Frame):
         self.framePriorite.grid(column=1, row=2)
         
         # Frame fases escamotaveis
-        for i,button in enumerate(self.buttonsPhase):
-            button.grid(column=i, row=0, padx=15)
+        for i,commande in enumerate(self.commandesEscamotables):
+            commande.button.grid(column=i, row=0, padx=15)
+            commande.label.grid(column=i, row=1, padx=15)
 
         # Frame demandas prioridade
         for i,code in enumerate(self.codes):
@@ -44,6 +50,7 @@ class AppIntersection(tk.Frame):
             button.grid(column=2*(i//self.vehiculesParCode)+1, row=1+i%self.vehiculesParCode, padx=5, pady=5)
         
         self.after(0, self.cycleCarrefour)
+        self.after(0, self.cycleEscamotables)
     
     def pauser(self):
         self.pause = not self.pause
@@ -80,6 +87,22 @@ class AppIntersection(tk.Frame):
             
         self.after(500, self.cycleCarrefour)
     
+    def cycleEscamotables(self):
+        for commande in self.commandesEscamotables:
+            if commande.phase.solicitee:
+                commande.stringVar.set(u'\u2022')
+            else:
+                commande.stringVar.set('')
+        
+        self.after(100, self.cycleEscamotables)
+
+class CommandeEscamotable:
+    def __init__(self, master, phase, function):
+        self.phase = phase
+        self.button = tk.Button(master, text=str(phase), command=function)
+        self.stringVar = tk.StringVar()
+        self.label = tk.Label(master, textvariable=self.stringVar, font=('', 24))
+    
 class DiagrammeLignes(tk.Canvas):
     def __init__(self, master):
         self.nomLignes = [ligne.nom for ligne in master.carrefour.listeLignes]
@@ -90,7 +113,7 @@ class DiagrammeLignes(tk.Canvas):
         self.y0 = 45
         self.lx = 18
         self.ly = 10
-        self.maxLen = 65
+        self.maxLen = 40
         
         self.width = (self.maxLen+4)*self.lx
         self.height = 3*self.ly*(self.nombreLignes+1)+15*len(master.codes)*master.vehiculesParCode

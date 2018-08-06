@@ -111,7 +111,9 @@ class Graphe:
         if chemin.sommeMin < maxDelai or len(chemin) <= maxLen: # Continua a busca
 #            print('Nao chegou no fim do galho')
             i = self.listeSommets.index(chemin.listePhases[-1])
-            enfants = [sommet for j,sommet in enumerate(self.listeSommets) if self.matrice[i,j] == 1]
+            # 'Rotate' na lista para começar a busca pela fase atual
+            enfants = [sommet for j,sommet in enumerate(self.listeSommets[i:],i) if self.matrice[i,j] == 1]
+            enfants += [sommet for j,sommet in enumerate(self.listeSommets[:i]) if self.matrice[i,j] == 1]
 #            print('Enfants:', enfants)
             
             for sommet in enfants:
@@ -343,7 +345,7 @@ def analyseSimplex(listeChemins, carrefour):
         # Pelo menos um veiculo na ultima fase
         if not chemin.listePhases[-1].exclusive:
             rowLast = glp_add_rows(lp, 1)
-            glp_set_row_name (lp, rowL, 'last')
+            glp_set_row_name (lp, rowLast, 'last')
             
             N = len(chemin)-1
             k = chemin.listePhases[N].codePriorite
