@@ -60,8 +60,10 @@ class LigneDeFeu:
     def solicitee(self):
         if self.codePriorite: # Linha prioritaria
             # Linha solicitada se existir algum veiculo com o mesmo codigo esperando
-            return bool([demande for demande in self.carrefour.demandesPriorite \
-                         if demande.delaiApproche <= 0 and demande.codePriorite == self.codePriorite])
+            return any(demande.delaiApproche <= 0 and demande.codePriorite == self.codePriorite \
+                       for demande in self.carrefour.demandesPriorite)
+#            return bool([demande for demande in self.carrefour.demandesPriorite \
+#                         if demande.delaiApproche <= 0 and demande.codePriorite == self.codePriorite])
                             
         elif self.phasesAssociees: # Linha escamotavel
             # Linha solicitada se pelo menos uma das fases associadas estiver solicitada
@@ -122,13 +124,13 @@ class Carrefour:
         for phaseActuelle in self.listePhases:
             phaseSuivante = suivant(phaseActuelle, self.listePhases)
             # Nao autorisa uma transiçao entre duas fases exclusivas
-            if not (phaseActuelle.exclusive and phaseSuivante.exclusive):
-                matrice[phaseActuelle.numero][phaseSuivante.numero] = 1
+            if not (phaseActuelle.exclusive and phaseSuivante.exclusive and phaseActuelle.codePriorite == phaseSuivante.codePriorite):
+                matrice[phaseActuelle.numero, phaseSuivante.numero] = 1
                 
             while phaseSuivante.escamotable and suivant(phaseSuivante, self.listePhases) != phaseActuelle:
                 phaseSuivante = suivant(phaseSuivante, self.listePhases)
-                if not (phaseActuelle.exclusive and phaseSuivante.exclusive):
-                    matrice[phaseActuelle.numero][phaseSuivante.numero] = 1
+                if not (phaseActuelle.exclusive and phaseSuivante.exclusive and phaseActuelle.codePriorite == phaseSuivante.codePriorite):
+                    matrice[phaseActuelle.numero, phaseSuivante.numero] = 1
                     
         return matrice
     
@@ -161,8 +163,7 @@ class Carrefour:
             tempsChangement = [0 if ligne in fermer else None for ligne in self.listeLignes]
             return Interphase(phase1, phase2, tempsChangement, duree)
         
-        
-        # Calcular matriz especifica
+        # Calcula a matriz especifica
         indexesOuvrir = [ligne.numero for ligne in ouvrir]
         indexesFermer = [ligne.numero for ligne in fermer]
         matriceReduite = self.matriceSecurite.copy()[indexesFermer,:][:,indexesOuvrir]
@@ -200,7 +201,6 @@ class Carrefour:
         # Decide a duracao da fase atual e qual sera a proxima fase
         if self.phaseActuelle.type == 'phase':
             if self.demandesPriorite:
-                print(self.demandesPriorite)
                 self.dureeActuelle,self.phaseProchaine = pri.cheminPrioritaire(self)
                 if self.phaseProchaine == None:
                     self.phaseProchaine = suivant(self.phaseActuelle, self.listePhases)

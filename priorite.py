@@ -104,11 +104,7 @@ class Graphe:
         # Verifica se chegou no fim do galho
 #        print('Min', chemin.sommeMin)
         
-        # enoughPhases indica se existe pelo menos uma fase distinta possivel no caminho para cada demanda
-#        enoughPhases = all((chemin.comptagesCodes[code] >= comptagesCodes[code]) for code in codesDemandes)
-#        maxLen = max(comptagesCodes.values())*len(self.listeSommets)
-        maxLen = 1*len(self.listeSommets)
-        if chemin.sommeMin < maxDelai or len(chemin) <= maxLen: # Continua a busca
+        if chemin.sommeMin < maxDelai or len(chemin) <= len(self.listeSommets): # Continua a busca
 #            print('Nao chegou no fim do galho')
             i = self.listeSommets.index(chemin.listePhases[-1])
             # 'Rotate' na lista para começar a busca pela fase atual
@@ -124,18 +120,29 @@ class Graphe:
                         if sommet in chemin.listePhases:
                             transitionPossible = False
 #                            print(sommet, 'Transicao impossivel: ESC')
-                    elif sommet.exclusive: # PEE
+#                    elif sommet.exclusive: # PEE
+#                        code = sommet.codePriorite
+#                        # Nao contabiliza a primeira fase caso ela possua o mesmo codigo da fase que queremos adicionar
+#                        if chemin.listePhases[0].codePriorite == code:
+#                            if chemin.comptagesCodes[code]-1 >= comptagesCodes[code]:
+#                                transitionPossible = False
+#                        else:
+#                            if chemin.comptagesCodes[code] >= comptagesCodes[code]:
+#                                transitionPossible = False
+##                            print(sommet, 'Transicao impossivel: PEE')
+                    else: # PEE ou PENE
                         code = sommet.codePriorite
-                        # Nao contabiliza a primeira fase caso ela possua o mesmo codigo da fase que queremos adicionar
+                        maxPhases = comptagesCodes[code]
+                        for phase in chemin.listePhases:
+                            if phase.codePriorite == code and not phase.exclusive: # PENE com o mesmo codigo
+                                if phase in chemin and phase.solicitee:
+                                    maxPhases += 1
                         if chemin.listePhases[0].codePriorite == code:
-                            if chemin.comptagesCodes[code]-1 >= comptagesCodes[code]:
-                                transitionPossible = False
-                        else:
-                            if chemin.comptagesCodes[code] >= comptagesCodes[code]:
-                                transitionPossible = False
-#                            print(sommet, 'Transicao impossivel: PEE')
-                    else: # PENE
-                        pass # ESCREVER ESSE PEDACO
+                            maxPhases += 1
+                        if chemin.comptagesCodes[code] >= maxPhases:
+                            transitionPossible = False
+                        
+                                
                         
                 if transitionPossible:
 #                    print(sommet, 'Transicao possivel')
@@ -479,6 +486,7 @@ def cheminPrioritaire(carrefour):
     
     tEnd = time.time()
     
+    print(carrefour.demandesPriorite)
     print('Meilleur chemin:', meilleurChemin)
     print('Chemins analisés: ', len(listeChemins))
     print('Temps (ms):', 1000*(tEnd-tBegin))
