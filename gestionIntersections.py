@@ -2,10 +2,7 @@ import numpy as np
 import priorite as pri
 
 def suivant(element, liste):
-    index = liste.index(element) + 1
-    if index == len(liste):
-        index = 0
-    return liste[index]
+    return liste[(liste.index(element) + 1) % len(liste)]
 
 class Phase:   
     def __init__(self, pNumero, pLignesActives, pMin, pNom, pMax, pEscamotable, pCodePriorite, pExclusive, pDureeBus, pIntervalle):

@@ -16,9 +16,9 @@ listeLignes = [gi.LigneDeFeu(0, 'B2', 'voiture', 3, 1),  \
                gi.LigneDeFeu(8, 'L10', 'voiture', 3, 0), \
                gi.LigneDeFeu(9, 'P11', 'pieton', 0, 0)]
                
-listePhases = [gi.Phase(0, [False, False, False, True, True, False, False, True, True, False], 14, 41, 60, False, 2, False, 0, -1),\
+listePhases = [gi.Phase(0, [False, False, False, True, True, False, False, True, True, False], 14, 41, 60, False, 2, False, 4, -1),\
                gi.Phase(1, [True, True, False, False, False, False, False, False, False, True], 4, 4, 30, True, 1, True, 4, 15),\
-               gi.Phase(2, [False, True, True, False, False, True, True, False, False, True], 11, 15, 40, False, 0, False, 4, -1),\
+               gi.Phase(2, [False, True, True, False, False, True, True, False, False, True], 11, 15, 40, False, 0, False, 0, -1),\
                gi.Phase(3, [True, False, False, True, False, False, False, True, False, False], 4, 4, 30, True, 1, True, 4, 15)]
                
 
@@ -69,14 +69,14 @@ matriceSecurite = [[0,0,1,0,2,4,2,0,2,0],   \
 #    
 carrefour = gi.Carrefour(listeLignes, listePhases, matriceSecurite)
 
-nPhases = len(carrefour.listePhases)
-MDI = np.zeros((nPhases,nPhases))
-for i in range(nPhases):
-    for j in range(nPhases):
-        if i != j:
-            MDI[i,j] = carrefour.matriceInterphase[i][j].duree
-
-print(MDI)
+#nPhases = len(carrefour.listePhases)
+#MDI = np.zeros((nPhases,nPhases))
+#for i in range(nPhases):
+#    for j in range(nPhases):
+#        if i != j:
+#            MDI[i,j] = carrefour.matriceInterphase[i][j].duree
+#
+#print(MDI)
 
 # Criação da interface grafica
 mainWindow = tk.Tk()
