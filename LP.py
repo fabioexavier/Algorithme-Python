@@ -34,7 +34,7 @@ class MatriceLP:
         
     def add(self, i, j, x):
         if self.N == self.NMax:
-            raise RuntileError("Nombre d'elements dans la MatriceLP dépasse le maximum")
+            raise RuntimeError("Nombre d'elements dans la MatriceLP dépasse le maximum")
         else:
             self.N += 1
             self.ia[self.N] = i
@@ -44,9 +44,12 @@ class MatriceLP:
     def load(self, lp):
         glp_load_matrix(lp, self.N, self.ia, self.ja, self.ar)
 
-def analyseLP(chemin):
+def analyseLP(chemin, demandesPriorite=None):
+    chemin.resultat = ResultatLP()
+    
     carrefour = chemin.carrefour
-    demandesPriorite = carrefour.demandesPriorite
+    if demandesPriorite is None:
+        demandesPriorite = carrefour.demandesPriorite
     
     # INITIALISATION
     
@@ -74,25 +77,18 @@ def analyseLP(chemin):
     for i,phase in enumerate(chemin):
         glp_set_col_name(lp, colU+i, 'u'+str(i+1))
         glp_set_col_bnds(lp, colU+i, GLP_LO, 0, 0)
-        if phase.exclusive:
-            glp_set_obj_coef(lp, colU+i, 2)
-        else:
-            glp_set_obj_coef(lp, colU+i, 1)
     
     # Variables R
     colR = glp_add_cols(lp, len(demandesPriorite))
     for i,demande in enumerate(demandesPriorite):
         glp_set_col_name(lp, colR+i, 'r'+str(i+1))
         glp_set_col_bnds(lp, colR+i, GLP_LO, 0, 0)
-        glp_set_obj_coef(lp, colR+i, 100)
         
-    
     # Partition des phases par rapport aux codes
     P = dict()
     for k in chemin.carrefour.codesPriorite:
         P[k] = [j for j,phase in enumerate(chemin) if phase.codePriorite == k]
             
-    
     # Variables H
     colH = []
     for i,demande in enumerate(demandesPriorite):
@@ -102,6 +98,19 @@ def analyseLP(chemin):
             glp_set_col_name(lp, colH[i]+j, 'h'+str(i+1)+str(j+1) )
             glp_set_col_kind(lp, colH[i]+j, GLP_BV)
 
+
+    # FONCTION OBJECTIVE
+    
+    for i,phase in enumerate(chemin):
+        if phase.exclusive:
+            glp_set_obj_coef(lp, colU+i, 2)
+        else:
+            glp_set_obj_coef(lp, colU+i, 1)
+    
+    maxDelai = max([demande.delaiApproche for demande in demandesPriorite])
+    for i,demande in enumerate(demandesPriorite):
+        glp_set_obj_coef(lp, colR+i, 100)
+    
     
     # CONTRAINTES    
     
@@ -128,7 +137,7 @@ def analyseLP(chemin):
     # Contraintes de délai d'approche
     
     # Pour chaque véhicule
-    for i,demande in enumerate(carrefour.demandesPriorite):
+    for i,demande in enumerate(demandesPriorite):
         k = demande.codePriorite
         
         # Pour chaque possible position de phase de passage
@@ -273,20 +282,17 @@ def analyseLP(chemin):
 #    print('')
     
     # Leitura variaveis
-    resultat = ResultatLP()
     status = glp_mip_status(lp)
 
     if status == GLP_OPT:
-        resultat.optimumTrouve = True
-        resultat.durees = [round(glp_mip_col_val(lp, colX+i)) for i in range(len(chemin))]
-        resultat.deviations = [round(glp_mip_col_val(lp, colU+i)) for i in range(len(chemin))]
-        resultat.retards = [round(glp_mip_col_val(lp, colR+j)) for j in range(len(carrefour.demandesPriorite))]
-        resultat.calcScore()
+        chemin.resultat.optimumTrouve = True
+        chemin.resultat.durees = [round(glp_mip_col_val(lp, colX+i)) for i in range(len(chemin))]
+        chemin.resultat.deviations = [round(glp_mip_col_val(lp, colU+i)) for i in range(len(chemin))]
+        chemin.resultat.retards = [round(glp_mip_col_val(lp, colR+j)) for j in range(len(demandesPriorite))]
+        chemin.resultat.calcScore()
             
     # Fin
     glp_delete_prob(lp)
-
-    return resultat
 
 
 def glp_print_col(lp, j):

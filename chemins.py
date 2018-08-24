@@ -1,4 +1,7 @@
+from copy import copy
 import numpy as np
+
+from LP import ResultatLP
 
 # Classe chemin
 
@@ -19,6 +22,8 @@ class Chemin:
                 self.comptageCodes[code] = 0
             self.comptageCodes[origine.codePriorite] += 1
             
+            self.resultat = ResultatLP()
+            
             self.carrefour = carrefour
             
             
@@ -28,6 +33,7 @@ class Chemin:
             self.phases = chemin.phases.copy()
             self.sommeMin = chemin.sommeMin
             self.comptageCodes = chemin.comptageCodes.copy()
+            self.resultat = copy(chemin.resultat)
             self.carrefour = chemin.carrefour
     
     def append(self, phase):
@@ -105,7 +111,8 @@ class Graphe:
    def enfants(self, sommet):
        i = self.sommets.index(sommet)
        
-       return [enfant for j,enfant in enumerate(self.sommets) if self.matrice[i,j] == 1]
+       return [enfant for j,enfant in enumerate(self.sommets[i:],i) if self.matrice[i,j] == 1] + \
+              [enfant for j,enfant in enumerate(self.sommets[:i]) if self.matrice[i,j] == 1]
  
 # Algorithme Recherche
 
@@ -150,34 +157,21 @@ def calcGraphe(carrefour):
 
 
 def rechercheRecursive(graphe, chemin, cheminsTrouves):
-#    print("")
-#    print(chemin)
     # Enregistre le chemin s'il est acceptable
     if chemin.valide():
-#        print("Valide")
         cheminsTrouves.append(chemin)
-#    else:
-#        print("Pas valide")
 
     # Teste si on est arrivé à la fin de la branche
-#    print("Somme min:", chemin.sommeMin)
     if not finDeBranche(graphe, chemin):
-#        print("Pas fin de branche")
         enfants = graphe.enfants(chemin.phases[-1])
-#        print("Enfants:", enfants)
 
         # Répète pour chaque enfant vers lequel la transition est valide
         for enfant in enfants:
             if chemin.transitionPossible(enfant):
-#                print("Enfant", enfant, "Transition possible")
                 cheminDerive = chemin.copy()
                 cheminDerive.append(enfant)
 
                 rechercheRecursive(graphe, cheminDerive, cheminsTrouves)
-#            else:
-#                print("Enfant", enfant, "Transition pas possible")
-#    else:
-#        print("Fin de branche")
 
 
 def finDeBranche(graphe, chemin):
