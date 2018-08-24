@@ -263,6 +263,7 @@ def analyseLP(chemin):
     parm = glp_iocp()
     glp_init_iocp(parm)
     parm.presolve = GLP_ON
+    parm.msg_level = GLP_MSG_OFF
     glp_intopt(lp, parm)
     
 #    for j in range(glp_get_num_cols(lp)):

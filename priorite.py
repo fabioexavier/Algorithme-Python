@@ -3,8 +3,6 @@ from chemins import rechercheChemins
 from LP import analyseLP
 
 def cheminPrioritaire(carrefour):
-    print("Demandes:", carrefour.demandesPriorite, end='\n\n')
-    
     # Calcule tous les chemins possibles
     cheminsPossibles = rechercheChemins(carrefour)
     
@@ -17,9 +15,9 @@ def cheminPrioritaire(carrefour):
         if resultat:
             cheminsFaisables.append(chemin)
             resultatsFaisables.append(resultat)
-        print(chemin)
-        print(resultat, end='\n\n')
-    print('')
+#        print(chemin)
+#        print(resultat, end='\n\n')
+#    print('')
         
     # Trouve le meilleur chemin
     index = np.argmin([resultat.score for resultat in resultatsFaisables])
@@ -27,10 +25,14 @@ def cheminPrioritaire(carrefour):
     meilleurResultat = resultatsFaisables[index]
     
     # Print
-    print('Meilleur Chemin:')
+    print("Demandes:", carrefour.demandesPriorite)
+    print('')
     print(meilleurChemin)
+    print('')
     print(meilleurResultat)
-    print("Chemins analysés:", len(cheminsPossibles) )
+    print('')
+    print("Chemins analyses:", len(cheminsPossibles) )
+    print('')
     
     # Returns
     dureeActuelle = meilleurResultat.durees[0]
