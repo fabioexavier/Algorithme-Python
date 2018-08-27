@@ -9,11 +9,8 @@ class ResultatLP:
         self.durees = []
         self.deviations = []
         self.retards = []
+        self.premierPassage = None
         self.score = None
-    
-    def calcScore(self):
-        if self.optimumTrouve:
-            self.score = sum(self.deviations) + 100*sum(self.retards)
     
     def __bool__(self):
         return self.optimumTrouve
@@ -44,9 +41,7 @@ class MatriceLP:
     def load(self, lp):
         glp_load_matrix(lp, self.N, self.ia, self.ja, self.ar)
 
-def analyseLP(chemin, demandesPriorite=None):
-    chemin.resultat = ResultatLP()
-    
+def analyseLP(chemin, demandesPriorite=None):   
     carrefour = chemin.carrefour
     if demandesPriorite is None:
         demandesPriorite = carrefour.demandesPriorite
@@ -284,54 +279,75 @@ def analyseLP(chemin, demandesPriorite=None):
     # Leitura variaveis
     status = glp_mip_status(lp)
 
+    chemin.resultat = ResultatLP()
     if status == GLP_OPT:
         chemin.resultat.optimumTrouve = True
         chemin.resultat.durees = [round(glp_mip_col_val(lp, colX+i)) for i in range(len(chemin))]
         chemin.resultat.deviations = [round(glp_mip_col_val(lp, colU+i)) for i in range(len(chemin))]
         chemin.resultat.retards = [round(glp_mip_col_val(lp, colR+j)) for j in range(len(demandesPriorite))]
-        chemin.resultat.calcScore()
+        
+        
+        # Calcule la phase où passe le premier véhicule prioritaire
+        chemin.resultat.premierPassage = len(chemin) - 1
+        
+        for i,demande in enumerate(demandesPriorite):
+            k = demande.codePriorite
+            varsH = [glp_mip_col_val(lp, colH[i]+j) for j in range(len(P[k]) )]
+            for j,Hij in enumerate(varsH):
+                if Hij == 1:
+                    chemin.resultat.premierPassage = min( (chemin.resultat.premierPassage, P[k][j]) )
+                    break
+        
+        # Score du chemin
+        chemin.resultat.score = sum(chemin.resultat.deviations) + 100*sum(chemin.resultat.retards)
             
     # Fin
     glp_delete_prob(lp)
 
 
-def glp_print_col(lp, j):
-    lb = glp_get_col_lb(lp, j)
-    ub = glp_get_col_ub(lp, j)
-    name = glp_get_col_name(lp, j)
-    print(lb, '<=', name, '<=', ub)
-    
-def glp_print_row(lp, i):
-    n = glp_get_num_cols(lp)
-    ind = intArray(n+1)
-    val = doubleArray(n+1)
-    glp_get_mat_row(lp, i, ind, val)
-    
-    string = ''
-    for k in range(n):
-        if ind[k+1] == 0:
-            break
-        name = glp_get_col_name(lp, ind[k+1])
-        if string == '':
-            string += str(val[k+1]) + '*' + name
-        else:
-            string += ' + ' + str(val[k+1]) + '*' + name
-    
-    if string == '':
-        string += '0'
-    
-    rowType = glp_get_row_type(lp, i)
-    typeDict = {GLP_LO:' >= ', GLP_UP:' <= ', GLP_FX:' = '}
-    if rowType in typeDict:
-        string += typeDict[rowType]
-        
-        if rowType == GLP_LO:
-            b = str(glp_get_row_lb(lp, i))
-        else:
-            b = str(glp_get_row_ub(lp, i))
-        string += b
-    
-    name = glp_get_row_name(lp, i)
-    if name == None:
-        name = ''
-    print(name + ' : ' + string)
+
+
+
+
+
+#
+#def glp_print_col(lp, j):
+#    lb = glp_get_col_lb(lp, j)
+#    ub = glp_get_col_ub(lp, j)
+#    name = glp_get_col_name(lp, j)
+#    print(lb, '<=', name, '<=', ub)
+#    
+#def glp_print_row(lp, i):
+#    n = glp_get_num_cols(lp)
+#    ind = intArray(n+1)
+#    val = doubleArray(n+1)
+#    glp_get_mat_row(lp, i, ind, val)
+#    
+#    string = ''
+#    for k in range(n):
+#        if ind[k+1] == 0:
+#            break
+#        name = glp_get_col_name(lp, ind[k+1])
+#        if string == '':
+#            string += str(val[k+1]) + '*' + name
+#        else:
+#            string += ' + ' + str(val[k+1]) + '*' + name
+#    
+#    if string == '':
+#        string += '0'
+#    
+#    rowType = glp_get_row_type(lp, i)
+#    typeDict = {GLP_LO:' >= ', GLP_UP:' <= ', GLP_FX:' = '}
+#    if rowType in typeDict:
+#        string += typeDict[rowType]
+#        
+#        if rowType == GLP_LO:
+#            b = str(glp_get_row_lb(lp, i))
+#        else:
+#            b = str(glp_get_row_ub(lp, i))
+#        string += b
+#    
+#    name = glp_get_row_name(lp, i)
+#    if name == None:
+#        name = ''
+#    print(name + ' : ' + string)
