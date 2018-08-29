@@ -69,14 +69,14 @@ matriceSecurite = [[0,0,5,0,0,2,0,0,0,0,2,0],   \
 #    
 carrefour = gi.Carrefour(listeLignes, listePhases, matriceSecurite)
 
-#nPhases = len(carrefour.listePhases)
-#MDI = np.zeros((nPhases,nPhases))
-#for i in range(nPhases):
-#    for j in range(nPhases):
-#        if i != j:
-#            MDI[i,j] = carrefour.matriceInterphase[i][j].duree
-#
-#print(MDI)
+nPhases = len(carrefour.listePhases)
+MDI = np.zeros((nPhases,nPhases))
+for i in range(nPhases):
+    for j in range(nPhases):
+        if i != j:
+            MDI[i,j] = carrefour.matriceInterphase[i][j].duree
+
+print(MDI)
 
 # Criação da interface grafica
 mainWindow = tk.Tk()
