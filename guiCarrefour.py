@@ -12,18 +12,14 @@ class AppIntersection(tk.Frame):
         
         # Criaçao dos widgets
         self.diagrammeLignes = DiagrammeLignes(self)
-                
-        self.buttonPause = tk.Button(self, text='Pause', command = self.pauser)
+        
+        self.frameButtons = tk.Frame(self)
+        self.buttonPause = tk.Button(self.frameButtons, text='Pause', command=self.pauser)
+        self.buttonSaveFile = tk.Button(self.frameButtons, text='Enregistrer', command=self.enregistrerFichier )
         
         self.frameEscamotable = tk.Frame(self)
         self.commandesEscamotables = [CommandeEscamotable(self.frameEscamotable, phase, lambda i=phase.numero:self.soliciterPhase(i)) \
                                      for phase in self.carrefour.listePhases if phase.escamotable and not phase.codePriorite]
-        
-#        self.buttonsPhase = [tk.Button(self.frameEscamotable, text='Phase '+str(i), command=lambda i=i:self.soliciterPhase(i)) \
-#                         for i,phase in enumerate(self.carrefour.listePhases) if phase.escamotable and not phase.codePriorite]
-#        self.stringsPhase = [tk.stringVar() for button in self.buttonsPhase]
-#        self.labelsPhase = [tk.Label(self.frameEscamotable, text='o') for phase in self.carrefour.listePhases if phase.escamotable and not phase.codePriorite]
-        
         
         self.framePriorite = tk.Frame(self)
         self.entriesDelai = [tk.Entry(self.framePriorite, width=15) for i in range(len(self.codes)*self.vehiculesParCode)]
@@ -32,9 +28,13 @@ class AppIntersection(tk.Frame):
         
         # Posicionamento
         self.diagrammeLignes.grid(column=0, row=0, columnspan=2)
-        self.buttonPause.grid(column=0, row=1, columnspan=2, pady=15)
+        self.frameButtons.grid(column=0, row=1, columnspan=2, pady=15)
         self.frameEscamotable.grid(column=0, row=2)
         self.framePriorite.grid(column=1, row=2)
+        
+        # Frame botoes
+        self.buttonPause.grid(column=0, row=0, padx=15)
+        self.buttonSaveFile.grid(column=1, row=0, padx=15)
         
         # Frame fases escamotaveis
         for i,commande in enumerate(self.commandesEscamotables):
@@ -67,6 +67,31 @@ class AppIntersection(tk.Frame):
             
         except ValueError:
             pass
+        
+    def enregistrerFichier(self):
+        file = open('../exemple.txt', 'w')
+        
+        file.write("<lignes>\n")
+        file.write(self.carrefour.fileStrLignes() )
+        file.write("</lignes>\n")
+        
+        file.write("<phases>\n")
+        file.write(self.carrefour.fileStrPhases() )
+        file.write("</phases>\n")
+        
+        file.write("<interphases>\n")
+        file.write(self.carrefour.fileStrInterphases() )
+        file.write("</interphases>\n")
+        
+        file.write("<demandes>\n")
+        file.write(self.carrefour.fileStrDemandes() )
+        file.write("</demandes>\n")
+        
+        file.write("<actuelle>\n")
+        file.write(self.carrefour.fileStrActuelle() )
+        file.write("</actuelle>\n")
+        
+        file.close()
     
     def cycleCarrefour(self):
         if not self.pause:

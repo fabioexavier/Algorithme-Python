@@ -215,7 +215,7 @@ def repartitionDurees(chemin):
                     if chemin.phases[j].lignesActives[i]:
                         break
                     else:
-                        if numPhases <  resultat.premierPassage:
+                        if numPhases < resultat.premierPassage:
                             numPhases += 1  
                         else:
                             sommeXFixes += resultat.durees[j]

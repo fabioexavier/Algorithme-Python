@@ -281,5 +281,55 @@ class Carrefour:
                 break
         else:
             self.demandesPriorite.append(DemandePriorite(delaiApproche, codePriorite, codeVehicule))
+            
+    def fileStrLignes(self):
+        s = ""
+        for i,ligne in enumerate(self.listeLignes):
+            if ligne.solicitee() and ligne.couleur == 'red':
+                n = ligne.compteurRouge
+            else:
+                n = -1
+            s += str(n) + ' '
+        s += '\n'
+        return s
     
+    def fileStrPhases(self):
+        def bool2char(b):
+            if b:
+                return 'T'
+            else:
+                return 'F'
+        
+        s = ""
+        for phase in self.listePhases:
+            s += str(phase.numero) + ' '
+            for boolean in phase.lignesActives:
+                s += bool2char(boolean) + ' '
+            s += str(phase.dureeMinimale) + ' ' + str(phase.dureeNominale) + ' ' + str(phase.dureeMaximale) + ' '
+            s += bool2char(phase.escamotable) + ' '
+            s += str(phase.codePriorite) + ' '
+            s += bool2char(phase.exclusive) + ' '
+            s += bool2char(phase.solicitee) + ' '
+            s += str(phase.intervalle) + '\n'
+            
+        return s
+    
+    def fileStrInterphases(self):
+        s = ""
+        for i in range(len(self.listePhases)):
+            for j in range(len(self.listePhases)):
+                n = self.matriceInterphase[i][j].duree if (not self.matriceInterphase[i][j] is None) else 0
+                s += str(n) + ' '
+            s += '\n'
+        return s
+    
+    def fileStrDemandes(self):
+        s = ""
+        for demande in self.demandesPriorite:
+            s += str(demande.delaiApproche) + ' ' + str(demande.codePriorite) + '\n'
+        return s
+    
+    def fileStrActuelle(self):
+        return str(self.phaseActuelle.numero) + ' ' + str(self.tempsPhase) + '\n'
+        
     

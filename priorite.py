@@ -28,6 +28,7 @@ def cheminPrioritaire(carrefour):
         cheminsFaisables.sort(key=lambda chemin: min(chemin.resultat.retards) )
         meilleurChemin = cheminsFaisables[0]
     
+    # Derniere repartition des durees pour garder les proportions le plus possible
     repartitionDurees(meilleurChemin)
     
     end = timer()
