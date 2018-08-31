@@ -34,9 +34,9 @@ def cheminPrioritaire(carrefour):
     end = timer()
     
     print("Demandes:", carrefour.demandesPriorite, '\n')
-    for chemin in cheminsFaisables:
-        print(chemin, '\n')
-        print(chemin.resultat, '\n')
+#    for chemin in cheminsFaisables:
+#        print(chemin, '\n')
+#        print(chemin.resultat, '\n')
     print("Meilleur chemin:", '\n')
     print(meilleurChemin, '\n')
     print(meilleurChemin.resultat, '\n')

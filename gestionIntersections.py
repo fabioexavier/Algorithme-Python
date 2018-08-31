@@ -304,12 +304,14 @@ class Carrefour:
         for phase in self.listePhases:
             s += str(phase.numero) + ' '
             for boolean in phase.lignesActives:
-                s += bool2char(boolean) + ' '
+                s += bool2char(boolean)
+            s += ' '
             s += str(phase.dureeMinimale) + ' ' + str(phase.dureeNominale) + ' ' + str(phase.dureeMaximale) + ' '
             s += bool2char(phase.escamotable) + ' '
             s += str(phase.codePriorite) + ' '
             s += bool2char(phase.exclusive) + ' '
             s += bool2char(phase.solicitee) + ' '
+            s += str(phase.dureeBus) + ' '
             s += str(phase.intervalle) + '\n'
             
         return s
