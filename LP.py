@@ -10,7 +10,8 @@ class ResultatLP:
         self.deviations = []
         self.attentes = []
         self.passages = []
-        self.retards = []
+        self.retardsEnsemble = []
+        self.retardsIndividuels = []
         self.score = None
     
     def __bool__(self):
@@ -18,11 +19,12 @@ class ResultatLP:
     
     def __str__(self):
 
-        return "Durees : "              + str(self.durees)      + "\n" + \
-               "Deviations : "          + str(self.deviations)  + "\n" + \
-               "Attentes: "             + str(self.attentes)    + "\n" + \
-               "Score: "                + str(self.score)       + "\n" + \
-               "Retards Admissibles: "  + str(self.retards)
+        return "Durees : "              + str(self.durees)              + "\n" + \
+               "Deviations : "          + str(self.deviations)          + "\n" + \
+               "Attentes: "             + str(self.attentes)            + "\n" + \
+               "Score: "                + str(self.score)               + "\n" + \
+               "Retards Ensemble: "     + str(self.retardsEnsemble)     + "\n" + \
+               "Retards Individuels: "  + str(self.retardsIndividuels)
         
 class MatriceLP:
     def __init__(self, M=1000):
@@ -307,10 +309,10 @@ def analyseAttentes(chemin):
 
 
 def analyseRobustesse(chemin):
-#    demandesPriorite = chemin.carrefour.demandesPriorite
-#    chemin.resultat.retards = [0 for i in demandesPriorite]
-#    for vehicule in range(len(demandesPriorite) ):
-#        LPRobustesse(chemin, vehicule)
+    demandesPriorite = chemin.carrefour.demandesPriorite
+    chemin.resultat.retardsIndividuels = [0 for i in demandesPriorite]
+    for vehicule in range(len(demandesPriorite) ):
+        LPRobustesse(chemin, vehicule)
         
     LPRobustesse(chemin)
 
@@ -461,9 +463,9 @@ def LPRobustesse(chemin, vehicule=None):
 
     if status == GLP_OPT:
         if vehicule is None:
-            resultat.retards = [round(glp_mip_col_val(lp, colD+j)) for j in range(len(demandesPriorite))]
+            resultat.retardsEnsemble = [round(glp_mip_col_val(lp, colD+j)) for j in range(len(demandesPriorite))]
         else:
-            resultat.retards[vehicule] = round(glp_mip_col_val(lp, colD+vehicule) )
+            resultat.retardsIndividuels[vehicule] = round(glp_mip_col_val(lp, colD+vehicule) )
             
     # Fin
     glp_delete_prob(lp)

@@ -10,17 +10,17 @@ class Chemin:
         if 'carrefour' in kwargs:
             carrefour = kwargs['carrefour']
         
-            origine = carrefour.phaseActuelle
+            if carrefour.phaseActuelle.type == 'phase':
+                origine = carrefour.phaseActuelle
+                self.sommeMin = max( (origine.dureeMinimale - carrefour.tempsPhase, 0) )
+                
+            elif carrefour.phaseActuelle.type == 'interphase':
+                origine = carrefour.phaseActuelle.phaseDestination
+                self.sommeMin = carrefour.phaseActuelle.duree - carrefour.tempsPhase + origine.dureeMinimale
             
-            self.phases = []
-            self.phases.append(origine)
+            self.phases = [origine]
             
-            self.sommeMin = max( (origine.dureeMinimale - carrefour.tempsPhase, 0) )
-            
-            self.comptageCodes = dict()
-            for code in carrefour.codesPriorite:
-                self.comptageCodes[code] = 0
-            self.comptageCodes[origine.codePriorite] += 1
+            self.comptageLignes = [1 if origine.lignesActives[ligne.numero] else 0 for ligne in carrefour.listeLignes]
             
             self.resultat = ResultatLP()
             
@@ -32,7 +32,7 @@ class Chemin:
             
             self.phases = chemin.phases.copy()
             self.sommeMin = chemin.sommeMin
-            self.comptageCodes = chemin.comptageCodes.copy()
+            self.comptageLignes = chemin.comptageLignes.copy()
             self.resultat = copy(chemin.resultat)
             self.carrefour = chemin.carrefour
     
@@ -42,48 +42,46 @@ class Chemin:
         self.sommeMin += self.carrefour.matriceInterphase[self.phases[-2].numero][self.phases[-1].numero].duree
         self.sommeMin += phase.dureeMinimale  
     
-        self.comptageCodes[phase.codePriorite] += 1
+        for ligne in self.carrefour.listeLignes:
+            if phase.lignesActives[ligne.numero]:
+                self.comptageLignes[ligne.numero] += 1
             
     def copy(self):
         return Chemin(chemin=self)
 
     def valide(self):
-        return any(demande.codePriorite == self.phases[-1].codePriorite for demande in self.carrefour.demandesPriorite) \
-               and all(self.comptageCodes[demande.codePriorite] != 0 for demande in self.carrefour.demandesPriorite)
+        return all(self.comptageLignes[demande.ligne] > 0 for demande in self.carrefour.demandesPriorite) and \
+               any(self.phases[-1].lignesActives[demande.ligne] for demande in self.carrefour.demandesPriorite)
     
     def transitionPossible(self, phase):
-        transitionPossible = True
-        
         if phase.escamotable:
-            # Phase ESC
-            if phase.codePriorite == 0:
-                # Si la phase est deja dans le chemin
-                if phase in self:
-                    transitionPossible = False
+            lignesDemandees = set()
+            nDemandesCompatibles = 0
+            
+            for demande in self.carrefour.demandesPriorite:
+                if phase.lignesActives[demande.ligne]:
+                    lignesDemandees.add(demande.ligne)
+                    nDemandesCompatibles += 1
+            
+            phasesEquivalentes = {phase}
+            nPhasesEquivalentes = 1
+            
+            for p in self:
+                if any(p.lignesActives[ligne] for ligne in lignesDemandees):
+                    phasesEquivalentes.add(p)
+                    nPhasesEquivalentes += 1
+            
+            nSolicitations = 0
+            
+            for phase in phasesEquivalentes:
+                if phase.solicitee:
+                    nSolicitations += 1
+                    
+            return nDemandesCompatibles + nSolicitations >= nPhasesEquivalentes
         
-            # Phase PEE ou PENE
-            else:
-                code = phase.codePriorite
-    
-                # Nombre max admissible de phases avec ce code dans le chemin
-                # Admet une phase en plus si la première phase est PEE et a le même code
-                maxPhases = 1 if self.phases[0].exclusive and (self.phases[0].codePriorite == code) else 0
-                # +1 pour chaque demande avec le même code
-                for demande in self.carrefour.demandesPriorite:
-                    if demande.codePriorite == code:
-                        maxPhases += 1
-                
-                # +1 pour chaque phase PENE distincte, solicitée, avec le même code et dans le chemin
-                for phase in self.carrefour.listePhases:
-                    if (not phase.exclusive) and phase.solicitee and (phase.codePriorite == code) and (phase in self):
-                        maxPhases += 1
-    
-                # Empêche la transition si le nombre max de phases est déjà atteint
-                if self.comptageCodes[code] == maxPhases:
-                    transitionPossible = False
+        else:
+            return True
         
-        return transitionPossible;
-    
     def __len__(self):
         return len(self.phases)
     
@@ -130,8 +128,8 @@ def rechercheChemins(carrefour):
 
 
 def calcGraphe(carrefour):
-    # Identifie les sommets du graphe
-    sommets = [phase for phase in carrefour.listePhases if phase.solicitee or phase.codePriorite != 0]
+    # Identifie les sommets du graphe comme etant toutes les phases
+    sommets = carrefour.listePhases
     
     # Vérifie les transitions possibles et assemble la matrice
     matriceTransitions = np.zeros( (len(sommets), len(sommets) ) )
@@ -139,19 +137,20 @@ def calcGraphe(carrefour):
     for i,sommet1 in enumerate(sommets):
         j = (i+1) % len(sommets)
         sommet2 = sommets[j]
-        ajouterTransition = True
+        testerTransition = True
         
-        while ajouterTransition:
-            if not (sommet1.exclusive and sommet2.exclusive and sommet1.codePriorite == sommet2.codePriorite):
+        while testerTransition:
+            if not (sommet1.lignesActives == sommet2.lignesActives):
                 matriceTransitions[i,j] = 1
                 
-            ajouterTransition = False
             if sommet2.escamotable:
                 j = (j+1) % len(sommets)
                 sommet2 = sommets[j]
                 
-                if sommet2 != sommet1:
-                    ajouterTransition = True
+                if sommet2 == sommet1:
+                    testerTransition = False
+            else:
+                testerTransition = False
     
     return Graphe(sommets, matriceTransitions)
 
