@@ -7,8 +7,8 @@ class AppIntersection(tk.Frame):
         self.carrefour = pCarrefour
         self.pause = False
         
-        self.codes = [code for code in self.carrefour.codesPriorite if code != 0]
-        self.vehiculesParCode = 3
+        self.lignes = [ligne for ligne in self.carrefour.listeLignes if ligne.demandable]
+        self.vehiculesParLigne = 2
         
         # Criaçao dos widgets
         self.diagrammeLignes = DiagrammeLignes(self)
@@ -22,9 +22,9 @@ class AppIntersection(tk.Frame):
                                      for phase in self.carrefour.listePhases if phase.escamotable and not phase.codePriorite]
         
         self.framePriorite = tk.Frame(self)
-        self.entriesDelai = [tk.Entry(self.framePriorite, width=15) for i in range(len(self.codes)*self.vehiculesParCode)]
+        self.entriesDelai = [tk.Entry(self.framePriorite, width=6) for i in range(len(self.lignes)*self.vehiculesParLigne)]
         self.buttonsDelai = [tk.Button(self.framePriorite, text='Envoyer', command=lambda i=i:self.envoyerDelai(i)) \
-                            for i in range(len(self.codes)*self.vehiculesParCode)]
+                            for i in range(len(self.lignes)*self.vehiculesParLigne)]
         
         # Posicionamento
         self.diagrammeLignes.grid(column=0, row=0, columnspan=2)
@@ -42,12 +42,12 @@ class AppIntersection(tk.Frame):
             commande.label.grid(column=i, row=1, padx=15)
 
         # Frame demandas prioridade
-        for i,code in enumerate(self.codes):
-            tk.Label(self.framePriorite, text='Code '+str(code), font='Helvetica 10 bold').grid(column=2*i, row=0, columnspan=2)
+        for i,ligne in enumerate(self.lignes):
+            tk.Label(self.framePriorite, text='Ligne '+ligne.nom, font='Helvetica 10 bold').grid(column=2*i, row=0, columnspan=2)
             
         for i,(entry,button) in enumerate(zip(self.entriesDelai, self.buttonsDelai)):
-            entry.grid(column=2*(i//self.vehiculesParCode), row=1+i%self.vehiculesParCode, padx=5, pady=5)
-            button.grid(column=2*(i//self.vehiculesParCode)+1, row=1+i%self.vehiculesParCode, padx=5, pady=5)
+            entry.grid(column=2*(i//self.vehiculesParLigne), row=1+i%self.vehiculesParLigne, padx=5, pady=5)
+            button.grid(column=2*(i//self.vehiculesParLigne)+1, row=1+i%self.vehiculesParLigne, padx=5, pady=5)
         
         self.after(0, self.cycleCarrefour)
         self.after(0, self.cycleEscamotables)
@@ -61,9 +61,9 @@ class AppIntersection(tk.Frame):
     def envoyerDelai(self, index):
         try:
             delaiApproche = int(self.entriesDelai[index].get())
-            codePriorite = self.codes[index//self.vehiculesParCode]
+            ligne = self.lignes[index//self.vehiculesParLigne]
             codeVehicule = index
-            self.carrefour.demanderPriorite(delaiApproche, codePriorite, codeVehicule)
+            self.carrefour.demanderPriorite(delaiApproche, ligne.numero, codeVehicule)
             
         except ValueError:
             pass
@@ -104,7 +104,7 @@ class AppIntersection(tk.Frame):
             transition = self.carrefour.transition
             phase = self.carrefour.phaseActuelle.numero if self.carrefour.phaseActuelle.type == 'phase' else None
             
-            delaisApproche = [None]*len(self.codes)*self.vehiculesParCode
+            delaisApproche = [None]*len(self.lignes)*self.vehiculesParLigne
             for demande in self.carrefour.demandesPriorite:
                 delaisApproche[demande.codeVehicule] = demande.delaiApproche            
             
@@ -141,7 +141,7 @@ class DiagrammeLignes(tk.Canvas):
         self.maxLen = 40
         
         self.width = (self.maxLen+4)*self.lx
-        self.height = 3*self.ly*(self.nombreLignes+1)+15*len(master.codes)*master.vehiculesParCode
+        self.height = 3*self.ly*(self.nombreLignes+1)+15*len(master.lignes)*master.vehiculesParLigne
         
         tk.Canvas.__init__(self, master, width=self.width, height=self.height)
         self.pause = False

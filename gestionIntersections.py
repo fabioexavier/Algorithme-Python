@@ -39,12 +39,13 @@ class Interphase:
     __repr__ = __str__
 
 class LigneDeFeu:
-    def __init__(self, pNumero, pNom, pType, pTempsJaune, pCodePriorite):
+    def __init__(self, pNumero, pNom, pType, pTempsJaune, pPrioritaire, pDemandable):
         self.numero = pNumero
         self.nom = pNom
         self.type = pType
         self.tempsJaune = pTempsJaune
-        self.codePriorite = pCodePriorite
+        self.prioritaire = pPrioritaire
+        self.demandable = pDemandable
         
         self.compteurJaune = 0
         self.compteurRouge = 0
@@ -55,9 +56,9 @@ class LigneDeFeu:
         self.carrefour = None
     
     def solicitee(self):
-        if self.codePriorite: # Linha prioritaria
+        if self.prioritaire: # Linha prioritaria
             # Linha solicitada se existir algum veiculo com o mesmo codigo esperando
-            return any(demande.delaiApproche <= 0 and demande.codePriorite == self.codePriorite \
+            return any(demande.delaiApproche <= 0 and demande.ligne == self.numero \
                        for demande in self.carrefour.demandesPriorite)
 #            return bool([demande for demande in self.carrefour.demandesPriorite \
 #                         if demande.delaiApproche <= 0 and demande.codePriorite == self.codePriorite])
@@ -73,13 +74,13 @@ class LigneDeFeu:
         return self.nom
 
 class DemandePriorite:
-    def __init__(self, pDelaiApproche, pCodePriorite, pCodeVehicule):
+    def __init__(self, pDelaiApproche, pLigne, pCodeVehicule):
         self.delaiApproche = pDelaiApproche
-        self.codePriorite = pCodePriorite
+        self.ligne = pLigne
         self.codeVehicule = pCodeVehicule
         
     def __str__(self):
-        return str((self.delaiApproche,self.codePriorite))
+        return str((self.delaiApproche,self.ligne))
     __repr__ = __str__
 
 class Carrefour:
@@ -93,7 +94,7 @@ class Carrefour:
         
         # Identificaçao das linhas escamotaveis (dentre as nao prioritarias)
         for ligne in self.listeLignes:
-            if not ligne.codePriorite:
+            if not ligne.prioritaire:
                 phases = [phase for phase in self.listePhases if phase.lignesActives[ligne.numero] == True]
                 if all(phase.escamotable for phase in phases):
                     ligne.phasesAssociees = [phase for phase in phases if not phase.codePriorite]
@@ -112,7 +113,6 @@ class Carrefour:
         self.transition = False # Indica se fez uma transicao no segundo atual
         
         # Variaveis de prioridade
-        self.codesPriorite = {phase.codePriorite for phase in pListePhases}
         self.demandesPriorite = []
         
     def calcGraphe(self):
@@ -189,10 +189,10 @@ class Carrefour:
         #   o veiculo ja passou dureeBus segundos na fase
         if self.phaseActuelle.type == 'phase':
             for demande in self.demandesPriorite:
-                if demande.codePriorite == self.phaseActuelle.codePriorite:
+                if self.phaseActuelle.lignesActives[demande.ligne]:
                     if min((self.tempsPhase, -demande.delaiApproche)) >= self.phaseActuelle.dureeBus:
-                        demande.codePriorite = 0
-            self.demandesPriorite = [demande for demande in self.demandesPriorite if demande.codePriorite > 0]
+                        demande.ligne = -1
+            self.demandesPriorite = [demande for demande in self.demandesPriorite if demande.ligne >= 0]
         
         
         # Decide a duracao da fase atual e qual sera a proxima fase
@@ -274,14 +274,14 @@ class Carrefour:
     def soliciterPhase(self, n):
         self.listePhases[n].solicitee = True
     
-    def demanderPriorite(self, delaiApproche, codePriorite, codeVehicule):
+    def demanderPriorite(self, delaiApproche, ligne, codeVehicule):
         for demande in self.demandesPriorite:
             if demande.codeVehicule == codeVehicule:
                 demande.delaiApproche = delaiApproche
                 break
         else:
-            self.demandesPriorite.append(DemandePriorite(delaiApproche, codePriorite, codeVehicule))
-            
+            self.demandesPriorite.append(DemandePriorite(delaiApproche, ligne, codeVehicule) )
+        
     def fileStrLignes(self):
         s = ""
         for i,ligne in enumerate(self.listeLignes):
@@ -328,7 +328,7 @@ class Carrefour:
     def fileStrDemandes(self):
         s = ""
         for demande in self.demandesPriorite:
-            s += str(demande.delaiApproche) + ' ' + str(demande.codePriorite) + '\n'
+            s += str(demande.delaiApproche) + ' ' + str(demande.ligne) + '\n'
         return s
     
     def fileStrActuelle(self):

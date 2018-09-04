@@ -5,20 +5,20 @@ import numpy as np
 
 
 # Dossier Reunion
-listeLignes = [gi.LigneDeFeu(0, 'B2', 'voiture', 3, 1),  \
-               gi.LigneDeFeu(1, 'P3', 'pieton', 0, 0),   \
-               gi.LigneDeFeu(2, 'P4', 'pieton', 0, 0),   \
-               gi.LigneDeFeu(3, 'P5', 'pieton', 0, 0),   \
-               gi.LigneDeFeu(4, 'L6', 'voiture', 3, 0),  \
-               gi.LigneDeFeu(5, 'P7', 'pieton', 0, 0),   \
-               gi.LigneDeFeu(6, 'L8', 'voiture', 3, 0),  \
-               gi.LigneDeFeu(7, 'P9', 'pieton', 0, 0),   \
-               gi.LigneDeFeu(8, 'L10', 'voiture', 3, 0), \
-               gi.LigneDeFeu(9, 'P11', 'pieton', 0, 0)]
+listeLignes = [gi.LigneDeFeu(0, 'B2', 'voiture', 3, True, True),  \
+               gi.LigneDeFeu(1, 'P3', 'pieton', 0, False, False),   \
+               gi.LigneDeFeu(2, 'P4', 'pieton', 0, False, False),   \
+               gi.LigneDeFeu(3, 'P5', 'pieton', 0, False, False),   \
+               gi.LigneDeFeu(4, 'L6', 'voiture', 3, False, True),  \
+               gi.LigneDeFeu(5, 'P7', 'pieton', 0, False, False),   \
+               gi.LigneDeFeu(6, 'L8', 'voiture', 3, False, False),  \
+               gi.LigneDeFeu(7, 'P9', 'pieton', 0, False, False),   \
+               gi.LigneDeFeu(8, 'L10', 'voiture', 3, False, False), \
+               gi.LigneDeFeu(9, 'P11', 'pieton', 0, False, False)]
                
-listePhases = [gi.Phase(0, [False, False, False, True, True, False, False, True, True, False], 14, 41, 60, False, 2, False, 4, -1),\
+listePhases = [gi.Phase(0, [False, False, False, True, True, False, False, True, True, False], 15, 40, 45, False, 2, False, 4, -1),\
                gi.Phase(1, [True, True, False, False, False, False, False, False, False, True], 4, 4, 30, True, 1, True, 4, 15),\
-               gi.Phase(2, [False, True, True, False, False, True, True, False, False, True], 11, 15, 40, False, 0, False, 0, -1),\
+               gi.Phase(2, [False, True, True, False, False, True, True, False, False, True], 15, 40, 45, False, 0, False, 0, -1),\
                gi.Phase(3, [True, False, False, True, False, False, False, True, False, False], 4, 4, 30, True, 1, True, 4, 15)]
                
 
