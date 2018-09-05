@@ -39,7 +39,7 @@ class Interphase:
     __repr__ = __str__
 
 class LigneDeFeu:
-    def __init__(self, pNumero, pNom, pType, pTempsJaune, pPrioritaire, pDemandable):
+    def __init__(self, pNumero, pNom, pType, pTempsJaune, pPrioritaire, pDemandable, pCorrection):
         self.numero = pNumero
         self.nom = pNom
         self.type = pType
@@ -52,6 +52,8 @@ class LigneDeFeu:
         self.phasesAssociees = [] # Fases escamotaveis ligadas a essa linha
         
         self.couleur = 'red'
+        
+        self.correctionDelai = pCorrection
         
         self.carrefour = None
     
@@ -186,44 +188,46 @@ class Carrefour:
         
         # Remove as demandas de prioridade que foram atendidas
         # Considera-se a demanda atendida quando a fase atual permite que o veiculo passe E
-        #   o veiculo ja passou dureeBus segundos na fase
+        #   o veiculo ja passou 1 segundo na fase
         if self.phaseActuelle.type == 'phase':
             for demande in self.demandesPriorite:
                 if self.phaseActuelle.lignesActives[demande.ligne]:
-                    if min((self.tempsPhase, -demande.delaiApproche)) >= self.phaseActuelle.dureeBus:
+                    if self.tempsPhase > 0 and demande.delaiApproche < 0:
                         demande.ligne = -1
             self.demandesPriorite = [demande for demande in self.demandesPriorite if demande.ligne >= 0]
         
         
         # Decide a duracao da fase atual e qual sera a proxima fase
-        if self.phaseActuelle.type == 'phase':
-            if self.demandesPriorite:
-                self.dureeActuelle,self.phaseProchaine = pri.cheminPrioritaire(self)
-                if self.phaseProchaine == None:
-                    self.phaseProchaine = suivant(self.phaseActuelle, self.listePhases)
-                    while not self.phaseProchaine.solicitee:
-                        self.phaseProchaine = suivant(self.phaseProchaine, self.listePhases)
-            else:
-                self.dureeActuelle = self.phaseActuelle.dureeNominale
+        
+        if self.demandesPriorite:
+            chemin = pri.cheminPrioritaire(self)
+            
+            if self.phaseActuelle.type == 'phase':
+                self.dureeActuelle = chemin.resultat.durees[0]
+                self.phaseProchaine = chemin.phases[1] if len(chemin) > 1 else chemin.phases[0]
                 
-                # Avança na lista de fases ate achar uma fase solicitada
-                self.phaseProchaine = suivant(self.phaseActuelle, self.listePhases)
-                while not self.phaseProchaine.solicitee:
-                    self.phaseProchaine = suivant(self.phaseProchaine, self.listePhases)
+        elif self.phaseActuelle.type == 'phase':
+            self.dureeActuelle = self.phaseActuelle.dureeNominale
+            
+            # Avança na lista de fases ate achar uma fase solicitada
+            self.phaseProchaine = suivant(self.phaseActuelle, self.listePhases)
+            while not self.phaseProchaine.solicitee:
+                self.phaseProchaine = suivant(self.phaseProchaine, self.listePhases)
+        
+        if self.phaseActuelle.type == 'interphase': 
+            self.dureeActuelle = self.phaseActuelle.duree
+        
         
         # Se chegou no fim da fase
         if self.tempsPhase >= self.dureeActuelle: # Se chegou no fim da fase/interfase
             if self.phaseActuelle.type == 'phase':
-                # Reset da solicitaçao se a fase for escamotavel
-                if self.phaseActuelle.escamotable:
-                    self.phaseActuelle.solicitee = False
-                
-                # Troca de fase
                 if self.phaseProchaine != self.phaseActuelle:
+                    # Reset da solicitaçao se a fase for escamotavel
+                    if self.phaseActuelle.escamotable:
+                        self.phaseActuelle.solicitee = False
+                    
                     self.phaseActuelle = self.interphase(self.phaseActuelle, self.phaseProchaine)
-                    if self.phaseActuelle.duree > 0: # Pula a interfase se a duraçao for 0
-                        self.dureeActuelle = self.phaseActuelle.duree
-                    else:
+                    if self.phaseActuelle.duree <= 0: # Pula a interfase se a duraçao for 0
                         self.phaseActuelle = self.phaseActuelle.phaseDestination
                     self.tempsPhase = 0
                     self.transition = True

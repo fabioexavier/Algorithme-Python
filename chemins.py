@@ -66,7 +66,7 @@ class Chemin:
             phasesEquivalentes = {phase}
             nPhasesEquivalentes = 1
             
-            for p in self:
+            for p in self.phases[1:]:
                 if any(p.lignesActives[ligne] for ligne in lignesDemandees):
                     phasesEquivalentes.add(p)
                     nPhasesEquivalentes += 1
@@ -156,21 +156,34 @@ def calcGraphe(carrefour):
 
 
 def rechercheRecursive(graphe, chemin, cheminsTrouves):
+#    print("Chemin:", chemin)
+    
     # Enregistre le chemin s'il est acceptable
     if chemin.valide():
+#        print("Valide")
         cheminsTrouves.append(chemin)
+#    else:
+#        print("Pas Valide")
 
     # Teste si on est arrivé à la fin de la branche
     if not finDeBranche(graphe, chemin):
         enfants = graphe.enfants(chemin.phases[-1])
+#        print("Enfants:", enfants)
 
         # Répète pour chaque enfant vers lequel la transition est valide
         for enfant in enfants:
             if chemin.transitionPossible(enfant):
+#                print(enfant, "Transition Possible")
                 cheminDerive = chemin.copy()
                 cheminDerive.append(enfant)
 
                 rechercheRecursive(graphe, cheminDerive, cheminsTrouves)
+#            else:
+#                print(enfant, "Transition Pas Possible")
+#    else:
+#        print("Fin de Branche")
+#    
+#    print('\n\n')
 
 
 def finDeBranche(graphe, chemin):
