@@ -23,6 +23,7 @@ def cheminPrioritaire(carrefour):
     
     # Trouve le meilleur chemin
     cheminsFaisables.sort(key=lambda chemin: chemin.resultat.score)
+#    print("Analyse Robustesse: ", '\n')
     for chemin in cheminsFaisables:
         analyseRobustesse(chemin)
 #        print(chemin, '\n')
@@ -36,7 +37,7 @@ def cheminPrioritaire(carrefour):
         meilleurChemin = cheminsFaisables[0]
     
     # Derniere repartition des durees pour garder les proportions le plus possible
-    repartitionDurees(meilleurChemin)
+#    repartitionDurees(meilleurChemin)
     
     end = timer()
     
