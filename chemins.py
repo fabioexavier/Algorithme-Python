@@ -193,5 +193,5 @@ def finDeBranche(graphe, chemin):
     # Calcule plus grand delai d'approche
     maxDelai = max([demande.delaiApproche for demande in chemin.carrefour.demandesPriorite])
 
-    return (chemin.sommeMin >= maxDelai) and (len(chemin) >= len(graphe.sommets) )
+    return (chemin.sommeMin >= maxDelai) and (len(chemin) >= len(graphe.sommets)+1 )
 

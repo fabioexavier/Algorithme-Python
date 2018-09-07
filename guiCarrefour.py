@@ -19,12 +19,14 @@ class AppIntersection(tk.Frame):
         
         self.frameEscamotable = tk.Frame(self)
         self.commandesEscamotables = [CommandeEscamotable(self.frameEscamotable, phase, lambda i=phase.numero:self.soliciterPhase(i)) \
-                                     for phase in self.carrefour.listePhases if phase.escamotable and not phase.codePriorite]
+                                     for phase in self.carrefour.listePhases if phase.escamotable and not phase.exclusive]
         
         self.framePriorite = tk.Frame(self)
         self.entriesDelai = [tk.Entry(self.framePriorite, width=6) for i in range(len(self.lignes)*self.vehiculesParLigne)]
-        self.buttonsDelai = [tk.Button(self.framePriorite, text='Envoyer', command=lambda i=i:self.envoyerDelai(i)) \
-                            for i in range(len(self.lignes)*self.vehiculesParLigne)]
+        self.buttonsEnvoyer = [tk.Button(self.framePriorite, text='Envoyer', command=lambda i=i:self.envoyerDelai(i)) \
+                               for i in range(len(self.lignes)*self.vehiculesParLigne)]
+        self.buttonsFranchissement = [tk.Button(self.framePriorite, text='Franchir', command=lambda i=i:self.franchir(i)) \
+                                      for i in range(len(self.lignes)*self.vehiculesParLigne)]
         
         # Posicionamento
         self.diagrammeLignes.grid(column=0, row=0, columnspan=2)
@@ -43,11 +45,12 @@ class AppIntersection(tk.Frame):
 
         # Frame demandas prioridade
         for i,ligne in enumerate(self.lignes):
-            tk.Label(self.framePriorite, text='Ligne '+ligne.nom, font='Helvetica 10 bold').grid(column=2*i, row=0, columnspan=2)
+            tk.Label(self.framePriorite, text='Ligne '+ligne.nom, font='Helvetica 10 bold').grid(column=3*i, row=0, columnspan=3)
             
-        for i,(entry,button) in enumerate(zip(self.entriesDelai, self.buttonsDelai)):
-            entry.grid(column=2*(i//self.vehiculesParLigne), row=1+i%self.vehiculesParLigne, padx=5, pady=5)
-            button.grid(column=2*(i//self.vehiculesParLigne)+1, row=1+i%self.vehiculesParLigne, padx=5, pady=5)
+        for i,(entry,buttonE,buttonF) in enumerate(zip(self.entriesDelai, self.buttonsEnvoyer, self.buttonsFranchissement)):
+            entry.grid(column=3*(i//self.vehiculesParLigne), row=1+i%self.vehiculesParLigne, padx=5, pady=5)
+            buttonE.grid(column=3*(i//self.vehiculesParLigne)+1, row=1+i%self.vehiculesParLigne, padx=5, pady=5)
+            buttonF.grid(column=3*(i//self.vehiculesParLigne)+2, row=1+i%self.vehiculesParLigne, padx=5, pady=5)
         
         self.after(0, self.cycleCarrefour)
         self.after(0, self.cycleEscamotables)
@@ -58,15 +61,18 @@ class AppIntersection(tk.Frame):
     def soliciterPhase(self,n):
         self.carrefour.soliciterPhase(n)
     
-    def envoyerDelai(self, index):
+    def envoyerDelai(self, codeVehicule):
         try:
-            delaiApproche = int(self.entriesDelai[index].get())
-            ligne = self.lignes[index//self.vehiculesParLigne]
-            codeVehicule = index
+            delaiApproche = int(self.entriesDelai[codeVehicule].get())
+            ligne = self.lignes[codeVehicule//self.vehiculesParLigne]
             self.carrefour.demanderPriorite(delaiApproche, ligne.numero, codeVehicule)
             
         except ValueError:
             pass
+        
+    def franchir(self, codeVehicule):
+        self.carrefour.franchir(codeVehicule)
+        self.entriesDelai[codeVehicule].delete(0,tk.END)
         
     def enregistrerFichier(self):
         file = open('../exemple.txt', 'w')

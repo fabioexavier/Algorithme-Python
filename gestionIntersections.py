@@ -1,11 +1,12 @@
 import numpy as np
 import priorite as pri
+from time import sleep
 
 def suivant(element, liste):
     return liste[(liste.index(element) + 1) % len(liste)]
 
 class Phase:   
-    def __init__(self, pNumero, pLignesActives, pMin, pNom, pMax, pEscamotable, pCodePriorite, pExclusive, pDureeBus, pIntervalle):
+    def __init__(self, pNumero, pLignesActives, pMin, pNom, pMax, pEscamotable, pExclusive, pIntervalle):
         self.numero = pNumero
         self.lignesActives = pLignesActives
         
@@ -15,9 +16,7 @@ class Phase:
 
         self.escamotable = pEscamotable
         self.solicitee = not pEscamotable # Inicializa todas as fases escamotaveis como nao solicitadas
-        self.codePriorite = pCodePriorite
         self.exclusive = pExclusive
-        self.dureeBus = pDureeBus
         self.intervalle = pIntervalle
         
         self.type = 'phase'
@@ -39,7 +38,7 @@ class Interphase:
     __repr__ = __str__
 
 class LigneDeFeu:
-    def __init__(self, pNumero, pNom, pType, pTempsJaune, pPrioritaire, pDemandable, pCorrection):
+    def __init__(self, pNumero, pNom, pType, pTempsJaune, pPrioritaire, pDemandable, pMargeDebut, pMargeFin):
         self.numero = pNumero
         self.nom = pNom
         self.type = pType
@@ -53,7 +52,8 @@ class LigneDeFeu:
         
         self.couleur = 'red'
         
-        self.correctionDelai = pCorrection
+        self.margeDebut = pMargeDebut
+        self.margeFin = pMargeFin
         
         self.carrefour = None
     
@@ -80,9 +80,10 @@ class DemandePriorite:
         self.delaiApproche = pDelaiApproche
         self.ligne = pLigne
         self.codeVehicule = pCodeVehicule
+        self.franchi = False
         
     def __str__(self):
-        return str((self.delaiApproche,self.ligne))
+        return str((self.delaiApproche,self.ligne, self.codeVehicule, self.franchi))
     __repr__ = __str__
 
 class Carrefour:
@@ -187,15 +188,8 @@ class Carrefour:
         self.transition = False
         
         # Remove as demandas de prioridade que foram atendidas
-        # Considera-se a demanda atendida quando a fase atual permite que o veiculo passe E
-        #   o veiculo ja passou 1 segundo na fase
-        if self.phaseActuelle.type == 'phase':
-            for demande in self.demandesPriorite:
-                if self.phaseActuelle.lignesActives[demande.ligne]:
-                    if self.tempsPhase > 0 and demande.delaiApproche < 0:
-                        demande.ligne = -1
-            self.demandesPriorite = [demande for demande in self.demandesPriorite if demande.ligne >= 0]
-        
+#        print("Demandes:", self.demandesPriorite)
+        self.demandesPriorite = [demande for demande in self.demandesPriorite if not demande.franchi]
         
         # Decide a duracao da fase atual e qual sera a proxima fase
         
@@ -285,6 +279,11 @@ class Carrefour:
                 break
         else:
             self.demandesPriorite.append(DemandePriorite(delaiApproche, ligne, codeVehicule) )
+            
+    def franchir(self, codeVehicule):
+        for demande in self.demandesPriorite:
+            if demande.codeVehicule == codeVehicule:
+                demande.franchi = True
         
     def fileStrLignes(self):
         s = ""

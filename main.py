@@ -5,21 +5,21 @@ import numpy as np
 
 
 # Dossier Reunion
-listeLignes = [gi.LigneDeFeu(0, 'B2', 'voiture', 3, True, True, 3),  \
-               gi.LigneDeFeu(1, 'P3', 'pieton', 0, False, False, 3),   \
-               gi.LigneDeFeu(2, 'P4', 'pieton', 0, False, False, 3),   \
-               gi.LigneDeFeu(3, 'P5', 'pieton', 0, False, False, 3),   \
-               gi.LigneDeFeu(4, 'L6', 'voiture', 3, False, True, 3),  \
-               gi.LigneDeFeu(5, 'P7', 'pieton', 0, False, False, 3),   \
-               gi.LigneDeFeu(6, 'L8', 'voiture', 3, False, False, 3),  \
-               gi.LigneDeFeu(7, 'P9', 'pieton', 0, False, False, 3),   \
-               gi.LigneDeFeu(8, 'L10', 'voiture', 3, False, False, 3), \
-               gi.LigneDeFeu(9, 'P11', 'pieton', 0, False, False, 3)]
+listeLignes = [gi.LigneDeFeu(0, 'B2',  'voiture', 3, True,  True,  3, 1), \
+               gi.LigneDeFeu(1, 'P3',  'pieton',  0, False, False, 3, 5), \
+               gi.LigneDeFeu(2, 'P4',  'pieton',  0, False, False, 3, 5), \
+               gi.LigneDeFeu(3, 'P5',  'pieton',  0, False, False, 3, 5), \
+               gi.LigneDeFeu(4, 'L6',  'voiture', 3, False, True,  3, 1), \
+               gi.LigneDeFeu(5, 'P7',  'pieton',  0, False, False, 3, 5), \
+               gi.LigneDeFeu(6, 'L8',  'voiture', 3, False, False, 3, 1), \
+               gi.LigneDeFeu(7, 'P9',  'pieton',  0, False, False, 3, 5), \
+               gi.LigneDeFeu(8, 'L10', 'voiture', 3, False, False, 3, 1), \
+               gi.LigneDeFeu(9, 'P11', 'pieton',  0, False, False, 3, 1)]
                
-listePhases = [gi.Phase(0, [False, False, False, True, True, False, False, True, True, False], 15, 54, 80, False, 2, False, 4, -1),\
-               gi.Phase(1, [True, True, False, False, False, False, False, False, False, True], 4, 4, 30, True, 1, True, 4, 15),\
-               gi.Phase(2, [False, True, True, False, False, True, True, False, False, True], 10, 17, 35, False, 0, False, 0, -1),\
-               gi.Phase(3, [True, False, False, True, False, False, False, True, False, False], 4, 4, 30, True, 1, True, 4, 15)]
+listePhases = [gi.Phase(0, [False, False, False, True,  True,  False, False, True,  True,  False], 15, 54, 80, False, False, -1), \
+               gi.Phase(1, [True,  True,  False, False, False, False, False, False, False, True ],  3,  4, 30, True,  True,  15), \
+               gi.Phase(2, [False, True,  True,  False, False, True,  True,  False, False, True ], 10, 17, 35, False, False, -1), \
+               gi.Phase(3, [True,  False, False, True,  False, False, False, True,  False, False],  3,  4, 30, True,  True,  15)  ]
                
 
 matriceSecurite = [[0,0,1,0,2,4,2,0,2,0],   \
@@ -83,4 +83,4 @@ mainWindow = tk.Tk()
 mainWindow.title("Simulateur de Carrefour")
 app = gc.AppIntersection(mainWindow, carrefour)
 mainWindow.mainloop()
-
+        
