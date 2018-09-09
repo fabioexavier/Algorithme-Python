@@ -50,10 +50,7 @@ class MatriceLP:
     def load(self, lp):
         glp_load_matrix(lp, self.N, self.ia, self.ja, self.ar)
 
-
-
-
-def analyseAttentes(chemin):   
+def analyseAttentes(chemin, verbose = False):   
     carrefour = chemin.carrefour
     demandesPriorite = carrefour.demandesPriorite
     
@@ -108,7 +105,7 @@ def analyseAttentes(chemin):
             glp_set_col_kind(lp, colH[i]+j, GLP_BV)
 
     
-    # Véhicules qui peuvent passer dans chaque phase spécifique et variables Y,Z et W
+    # Véhicules qui peuvent passer dans chaque phase spécifique et variables Y,Z
     
     phasesSpecifiques = [p for p,phase in enumerate(chemin.phases) if phase.exclusive]
     V = dict()
@@ -130,7 +127,7 @@ def analyseAttentes(chemin):
     
     colW = glp_add_cols(lp, 1)
     glp_set_col_kind(lp, colW, GLP_BV)
-
+    
     # FONCTION OBJECTIVE
     paramExpObjective = 0.0693 # ln(2)/10 : Divise par 2 à chaque 10 s de différence
     
@@ -169,7 +166,7 @@ def analyseAttentes(chemin):
                 epsilon = min((-demande.delaiApproche, carrefour.tempsPhase-ligne.margeDebut))
                 if epsilon >= margeFin:
                     margeFin = epsilon+1
-                
+            
             # Equation 1
             row = glp_add_rows(lp, 1)
             glp_set_row_name(lp, row, 'v'+str(i+1)+str(j+1)+'eq1')
@@ -277,7 +274,7 @@ def analyseAttentes(chemin):
      
     # Contraintes des phases spécifiques
 
-    # Un véhicule au début et fin de chaque phase spécifique (sauf si elle est la première phase du chemin)
+    # Un véhicule au début et fin de chaque phase spécifique
     for i,p in enumerate(phasesSpecifiques):
         if p != 0:
             for j in range(len(V[i]) ):
@@ -340,89 +337,6 @@ def analyseAttentes(chemin):
             for j,p in enumerate(V[i]):
                 glp_matrix.add(row, colZ[i]+j, 1)
             glp_set_row_bnds(lp, row, GLP_FX, 1, 1)
-            
-        
-    # Traitement du véhicule à la fin de la première phase dans le cas où elle est spécifique
-    phase0 = chemin.phases[0]
-    if phase0.exclusive:
-        
-        # Equation de aucun vehicule dans la phase
-        row = glp_add_rows(lp, 1)
-        glp_set_row_name(lp, row, 'somme_h_w')
-        for i in V[0]:
-            glp_matrix.add(row, colH[i]+0, 1)        
-        glp_matrix.add(row, colW, -M)
-        rhs = 0
-        glp_set_row_bnds(lp, row, GLP_UP, 0, float(rhs))
-        
-        # Equation max x0 si aucun vehicule dans la phase
-        row = glp_add_rows(lp, 1)
-        glp_set_row_name(lp, row, 'max_x0_w')
-        glp_matrix.add(row, colX+0, 1)
-        glp_matrix.add(row, colW, -M)
-        rhs = max((chemin.phases[0].dureeMinimale, carrefour.tempsPhase))
-        glp_set_row_bnds(lp, row, GLP_UP, 0, float(rhs))
-        
-        for j,k in enumerate(V[0]):
-            demande = demandesPriorite[k]
-            ligne = carrefour.listeLignes[demande.ligne]
-            
-            # Somme des durées des interphases
-            sommeInterphases = 0 if carrefour.phaseActuelle.type == 'phase' else carrefour.phaseActuelle.duree
-            
-            # Marge Fin
-            margeFin = ligne.margeFin
-            if carrefour.phaseActuelle.type == 'phase':
-                epsilon = min((-demande.delaiApproche, carrefour.tempsPhase-ligne.margeDebut))
-                if epsilon >= ligne.margeFin:
-                    margeFin = epsilon+1
-            
-            
-            # Equations Z
-            
-            # Equation 1
-            row = glp_add_rows(lp, 1)
-            glp_set_row_name(lp, row, 'z'+str(1)+str(j+1)+'eq1')
-            
-            glp_matrix.add(row, colX+0, 1)
-            glp_matrix.add(row, colA+k, -1)
-            glp_matrix.add(row, colZ[0]+j, M)
-            glp_matrix.add(row, colW, M)
-            
-            rhs = carrefour.tempsPhase + demande.delaiApproche - sommeInterphases + 2*M + margeFin
-            glp_set_row_bnds(lp, row, GLP_UP, 0, float(rhs))
-            
-            # Equation 2
-            row = glp_add_rows(lp, 1)
-            glp_set_row_name(lp, row, 'z'+str(1)+str(j+1)+'eq2')
-            
-            glp_matrix.add(row, colX+0, 1)
-            glp_matrix.add(row, colA+k, -1)
-            glp_matrix.add(row, colZ[0]+j, -M)
-            glp_matrix.add(row, colW, -M)
-            
-            rhs = carrefour.tempsPhase + demande.delaiApproche - sommeInterphases - 2*M + margeFin
-            glp_set_row_bnds(lp, row, GLP_LO, float(rhs), 0)
-            
-        # Equations finales
-        row = glp_add_rows(lp, 1)
-        glp_set_row_name(lp, row, 'z'+str(1)+'sum1')
-        for j,k in enumerate(V[0]):
-            glp_matrix.add(row, colZ[0]+j, 1)
-        glp_matrix.add(row, colW, M)
-        rhs = 1+M
-        glp_set_row_bnds(lp, row, GLP_UP, 0, float(rhs))
-        
-        row = glp_add_rows(lp, 1)
-        glp_set_row_name(lp, row, 'z'+str(1)+'sum2')
-        for j,k in enumerate(V[0]):
-            glp_matrix.add(row, colZ[0]+j, 1)
-        glp_matrix.add(row, colW, -M)
-        rhs = 1-M
-        glp_set_row_bnds(lp, row, GLP_LO, float(rhs), 0)
-    
-    
-    
     
 #    # Contraintes d'intervalle entre véhicules dans la même phase exclusive
 #    for m,demandeM in enumerate(demandesPriorite[:-1]):
@@ -466,11 +380,12 @@ def analyseAttentes(chemin):
     parm.msg_level = GLP_MSG_OFF
     glp_intopt(lp, parm)
     
-#    for j in range(glp_get_num_cols(lp)):
-#        glp_print_col(lp, j+1)
-#    for i in range(glp_get_num_rows(lp)):
-#        glp_print_row(lp, i+1)
-#    print('')
+    if verbose:
+        for j in range(glp_get_num_cols(lp)):
+            glp_print_col(lp, j+1)
+        for i in range(glp_get_num_rows(lp)):
+            glp_print_row(lp, i+1)
+        print('')
     
     # Leitura variaveis
     status = glp_mip_status(lp)
@@ -672,16 +587,7 @@ def LPRobustesse(chemin, vehicule=None):
             
     # Fin
     glp_delete_prob(lp)
-      
-    
-    
-    
-    
-    
-    
-    
-    
-    
+        
         
 def repartitionDurees(chemin):
     carrefour = chemin.carrefour
