@@ -49,6 +49,7 @@ class LigneDeFeu:
         self.compteurJaune = 0
         self.compteurRouge = 0
         self.phasesAssociees = [] # Fases escamotaveis ligadas a essa linha
+        self.compteurFranchissement = -1
         
         self.couleur = 'red'
         
@@ -62,8 +63,6 @@ class LigneDeFeu:
             # Linha solicitada se existir algum veiculo com o mesmo codigo esperando
             return any(demande.delaiApproche <= 0 and demande.ligne == self.numero \
                        for demande in self.carrefour.demandesPriorite)
-#            return bool([demande for demande in self.carrefour.demandesPriorite \
-#                         if demande.delaiApproche <= 0 and demande.codePriorite == self.codePriorite])
                             
         elif self.phasesAssociees: # Linha escamotavel
             # Linha solicitada se pelo menos uma das fases associadas estiver solicitada
@@ -83,7 +82,7 @@ class DemandePriorite:
         self.franchi = False
         
     def __str__(self):
-        return str((self.delaiApproche,self.ligne, self.codeVehicule, self.franchi))
+        return str((self.delaiApproche,self.ligne))
     __repr__ = __str__
 
 class Carrefour:
@@ -95,7 +94,7 @@ class Carrefour:
         self.listePhases = pListePhases
         self.matriceSecurite = np.array(pMatriceSecurite)
         
-        # Identificaçao das linhas escamotaveis (dentre as nao prioritarias)
+        # Identificaçao das linhas escamotaveis (dentre as nao especificas)
         for ligne in self.listeLignes:
             if not ligne.prioritaire:
                 phases = [phase for phase in self.listePhases if phase.lignesActives[ligne.numero] == True]
@@ -262,6 +261,9 @@ class Carrefour:
                 
             elif ligne.couleur == 'green':
                 ligne.compteurRouge = 0
+                
+            if ligne.compteurFranchissement >= 0:
+                ligne.compteurFranchissement += 1
         
         for demande in self.demandesPriorite:
             demande.delaiApproche -= 1
@@ -284,6 +286,8 @@ class Carrefour:
         for demande in self.demandesPriorite:
             if demande.codeVehicule == codeVehicule:
                 demande.franchi = True
+                self.listeLignes[demande.ligne].compteurFranchissement = 0
+        
         
     def fileStrLignes(self):
         s = ""

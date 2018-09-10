@@ -17,9 +17,9 @@ listeLignes = [gi.LigneDeFeu(0, 'B2',  'voiture', 3, True,  True,  3, 1), \
                gi.LigneDeFeu(9, 'P11', 'pieton',  0, False, False, 3, 1)]
                
 listePhases = [gi.Phase(0, [False, False, False, True,  True,  False, False, True,  True,  False], 15, 54, 80, False, False, -1), \
-               gi.Phase(1, [True,  True,  False, False, False, False, False, False, False, True ],  3,  4, 30, True,  True,  15), \
+               gi.Phase(1, [True,  True,  False, False, False, False, False, False, False, True ],  3,  4, 40, True,  True,  15), \
                gi.Phase(2, [False, True,  True,  False, False, True,  True,  False, False, True ], 10, 17, 35, False, False, -1), \
-               gi.Phase(3, [True,  False, False, True,  False, False, False, True,  False, False],  3,  4, 30, True,  True,  15)  ]
+               gi.Phase(3, [True,  False, False, True,  False, False, False, True,  False, False],  3,  4, 40, True,  True,  15)  ]
                
 
 matriceSecurite = [[0,0,1,0,2,4,2,0,2,0],   \
