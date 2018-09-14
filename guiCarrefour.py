@@ -19,7 +19,7 @@ class AppIntersection(tk.Frame):
         
         self.frameEscamotable = tk.Frame(self)
         self.commandesEscamotables = [CommandeEscamotable(self.frameEscamotable, phase, lambda i=phase.numero:self.soliciterPhase(i)) \
-                                     for phase in self.carrefour.listePhases if phase.escamotable and not phase.exclusive]
+                                     for phase in self.carrefour.listePhases if phase.escamotable and not phase.specifique]
         
         self.framePriorite = tk.Frame(self)
         self.entriesDelai = [tk.Entry(self.framePriorite, width=6) for i in range(len(self.lignes)*self.vehiculesParLigne)]
@@ -75,29 +75,31 @@ class AppIntersection(tk.Frame):
         self.entriesDelai[codeVehicule].delete(0,tk.END)
         
     def enregistrerFichier(self):
-        file = open('../exemple.txt', 'w')
-        
-        file.write("<lignes>\n")
-        file.write(self.carrefour.fileStrLignes() )
-        file.write("</lignes>\n")
-        
-        file.write("<phases>\n")
-        file.write(self.carrefour.fileStrPhases() )
-        file.write("</phases>\n")
-        
-        file.write("<interphases>\n")
-        file.write(self.carrefour.fileStrInterphases() )
-        file.write("</interphases>\n")
-        
-        file.write("<demandes>\n")
-        file.write(self.carrefour.fileStrDemandes() )
-        file.write("</demandes>\n")
-        
-        file.write("<actuelle>\n")
-        file.write(self.carrefour.fileStrActuelle() )
-        file.write("</actuelle>\n")
-        
-        file.close()
+        pass
+    
+#        file = open('../exemple.txt', 'w')
+#        
+#        file.write("<lignes>\n")
+#        file.write(self.carrefour.fileStrLignes() )
+#        file.write("</lignes>\n")
+#        
+#        file.write("<phases>\n")
+#        file.write(self.carrefour.fileStrPhases() )
+#        file.write("</phases>\n")
+#        
+#        file.write("<interphases>\n")
+#        file.write(self.carrefour.fileStrInterphases() )
+#        file.write("</interphases>\n")
+#        
+#        file.write("<demandes>\n")
+#        file.write(self.carrefour.fileStrDemandes() )
+#        file.write("</demandes>\n")
+#        
+#        file.write("<actuelle>\n")
+#        file.write(self.carrefour.fileStrActuelle() )
+#        file.write("</actuelle>\n")
+#        
+#        file.close()
     
     def cycleCarrefour(self):
         if not self.pause:
@@ -114,7 +116,7 @@ class AppIntersection(tk.Frame):
             for demande in self.carrefour.demandesPriorite:
                 delaisApproche[demande.codeVehicule] = demande.delaiApproche            
             
-            self.diagrammeLignes.add(couleurs, transition, phase, self.carrefour.tempsPhase, delaisApproche, compteursRouge)
+            self.diagrammeLignes.add(couleurs, transition, phase, self.carrefour.tempsEcoule, delaisApproche, compteursRouge)
             
         self.after(500, self.cycleCarrefour)
     
@@ -144,7 +146,7 @@ class DiagrammeLignes(tk.Canvas):
         self.y0 = 45
         self.lx = 18
         self.ly = 10
-        self.maxLen = 40
+        self.maxLen = 50
         
         self.width = (self.maxLen+4)*self.lx
         self.height = 3*self.ly*(self.nombreLignes+1)+15*len(master.lignes)*master.vehiculesParLigne
@@ -160,11 +162,11 @@ class DiagrammeLignes(tk.Canvas):
         
         self.after(0, self.updateDiagramme)
     
-    def add(self, couleurs, transition, phase, tempsPhase, delaiApproche, compteursRouge):
+    def add(self, couleurs, transition, phase, tempsEcoule, delaiApproche, compteursRouge):
         self.bufferLignes.append(couleurs)
         self.bufferTransitions.append(transition)
         self.bufferPhases.append(phase)
-        self.bufferTemps.append(tempsPhase)
+        self.bufferTemps.append(tempsEcoule)
         self.bufferDelais.append(delaiApproche)
         
         if (len(self.bufferLignes) > self.maxLen):

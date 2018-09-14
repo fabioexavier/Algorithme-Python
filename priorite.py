@@ -15,10 +15,10 @@ def cheminPrioritaire(carrefour):
     cheminsFaisables = []
     
     for chemin in cheminsPossibles:
-        print(chemin, '\n')
-        analyseAttentes(chemin, True)
-        print(chemin.resultat, '\n')
-#        analyseAttentes(chemin)
+#        print(chemin, '\n')
+#        analyseAttentes(chemin, True)
+#        print(chemin.resultat, '\n')
+        analyseAttentes(chemin)
         if chemin.resultat:
             cheminsFaisables.append(chemin)
     
@@ -31,8 +31,8 @@ def cheminPrioritaire(carrefour):
         analyseRobustesse(chemin)
 #        print(chemin, '\n')
 #        print(chemin.resultat, '\n')
-        if all(retard >= 0.2*demande.delaiApproche for retard,demande in \
-               zip(chemin.resultat.retardsEnsemble, carrefour.demandesPriorite) if demande.delaiApproche > 0):
+        if all(retard >= 0.2*demande.delaiApproche for retard,demande \
+               in zip(chemin.resultat.retards, carrefour.demandesPriorite) ):
             meilleurChemin = chemin
             break
     else:

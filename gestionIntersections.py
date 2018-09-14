@@ -6,7 +6,7 @@ def suivant(element, liste):
     return liste[(liste.index(element) + 1) % len(liste)]
 
 class Phase:   
-    def __init__(self, pNumero, pLignesActives, pMin, pNom, pMax, pEscamotable, pExclusive, pIntervalle):
+    def __init__(self, pNumero, pLignesActives, pMin, pNom, pMax, pEscamotable, pSpecifique, pIntervalle):
         self.numero = pNumero
         self.lignesActives = pLignesActives
         
@@ -16,7 +16,7 @@ class Phase:
 
         self.escamotable = pEscamotable
         self.solicitee = not pEscamotable # Inicializa todas as fases escamotaveis como nao solicitadas
-        self.exclusive = pExclusive
+        self.specifique = pSpecifique
         self.intervalle = pIntervalle
         
         self.type = 'phase'
@@ -38,7 +38,7 @@ class Interphase:
     __repr__ = __str__
 
 class LigneDeFeu:
-    def __init__(self, pNumero, pNom, pType, pTempsJaune, pPrioritaire, pDemandable, pMargeDebut, pMargeFin):
+    def __init__(self, pNumero, pNom, pType, pTempsJaune, pPrioritaire, pDemandable, pMargeDebut, pMargeFin, pSuiveurs):
         self.numero = pNumero
         self.nom = pNom
         self.type = pType
@@ -55,6 +55,8 @@ class LigneDeFeu:
         
         self.margeDebut = pMargeDebut
         self.margeFin = pMargeFin
+        
+        self.suiveurs = pSuiveurs
         
         self.carrefour = None
     
@@ -99,7 +101,7 @@ class Carrefour:
             if not ligne.prioritaire:
                 phases = [phase for phase in self.listePhases if phase.lignesActives[ligne.numero] == True]
                 if all(phase.escamotable for phase in phases):
-                    ligne.phasesAssociees = [phase for phase in phases if not phase.codePriorite]
+                    ligne.phasesAssociees = [phase for phase in phases if not phase.specifique]
                 
         self.matriceGraphe = self.calcGraphe()
         self.matriceInterphase = self.genererInterphases()
@@ -110,7 +112,7 @@ class Carrefour:
             if not self.phaseActuelle.escamotable:
                 break
         self.dureeActuelle = self.phaseActuelle.dureeNominale
-        self.tempsPhase = 0
+        self.tempsEcoule = 0
         
         self.transition = False # Indica se fez uma transicao no segundo atual
         
@@ -123,12 +125,12 @@ class Carrefour:
         for phaseActuelle in self.listePhases:
             phaseSuivante = suivant(phaseActuelle, self.listePhases)
             # Nao autorisa uma transiçao entre duas fases exclusivas
-            if not (phaseActuelle.exclusive and phaseSuivante.exclusive and phaseActuelle.codePriorite == phaseSuivante.codePriorite):
+            if not (phaseActuelle.specifique and phaseSuivante.specifique and phaseActuelle.lignesActives == phaseSuivante.lignesActives):
                 matrice[phaseActuelle.numero, phaseSuivante.numero] = 1
                 
             while phaseSuivante.escamotable and suivant(phaseSuivante, self.listePhases) != phaseActuelle:
                 phaseSuivante = suivant(phaseSuivante, self.listePhases)
-                if not (phaseActuelle.exclusive and phaseSuivante.exclusive and phaseActuelle.codePriorite == phaseSuivante.codePriorite):
+                if not (phaseActuelle.specifique and phaseSuivante.specifique and phaseActuelle.lignesActives == phaseSuivante.lignesActives):
                     matrice[phaseActuelle.numero, phaseSuivante.numero] = 1
                     
         return matrice
@@ -212,22 +214,26 @@ class Carrefour:
         
         
         # Se chegou no fim da fase
-        if self.tempsPhase >= self.dureeActuelle: # Se chegou no fim da fase/interfase
+        if self.tempsEcoule >= self.dureeActuelle: # Se chegou no fim da fase/interfase
             if self.phaseActuelle.type == 'phase':
                 if self.phaseProchaine != self.phaseActuelle:
                     # Reset da solicitaçao se a fase for escamotavel
                     if self.phaseActuelle.escamotable:
                         self.phaseActuelle.solicitee = False
+                        
+                    # Reset dos compteurs de franchissement
+                    for ligne in self.listeLignes:
+                        ligne.compteurFranchissement = -1
                     
                     self.phaseActuelle = self.interphase(self.phaseActuelle, self.phaseProchaine)
                     if self.phaseActuelle.duree <= 0: # Pula a interfase se a duraçao for 0
                         self.phaseActuelle = self.phaseActuelle.phaseDestination
-                    self.tempsPhase = 0
+                    self.tempsEcoule = 0
                     self.transition = True
                     
             elif self.phaseActuelle.type == 'interphase':
                 self.phaseActuelle = self.phaseActuelle.phaseDestination
-                self.tempsPhase = 0
+                self.tempsEcoule = 0
                 self.transition = True
         
         # Atualiza a cor de cada linha
@@ -236,7 +242,7 @@ class Carrefour:
                 ligne.couleur = 'green' if self.phaseActuelle.lignesActives[i] else 'red'
             
             elif self.phaseActuelle.type == 'interphase':
-                if self.phaseActuelle.tempsChangement[i] == self.tempsPhase:
+                if self.phaseActuelle.tempsChangement[i] == self.tempsEcoule:
                     if ligne.couleur == 'red':
                         ligne.couleur = 'green'
                     elif ligne.couleur == 'green':
@@ -253,7 +259,7 @@ class Carrefour:
                     ligne.compteurJaune += 1
                 
         # Atualiza contadores
-        self.tempsPhase += 1
+        self.tempsEcoule += 1
         
         for ligne in self.listeLignes:          
             if ligne.couleur == 'red' and ligne.solicitee():
@@ -316,7 +322,7 @@ class Carrefour:
             s += str(phase.dureeMinimale) + ' ' + str(phase.dureeNominale) + ' ' + str(phase.dureeMaximale) + ' '
             s += bool2char(phase.escamotable) + ' '
             s += str(phase.codePriorite) + ' '
-            s += bool2char(phase.exclusive) + ' '
+            s += bool2char(phase.specifique) + ' '
             s += bool2char(phase.solicitee) + ' '
             s += str(phase.dureeBus) + ' '
             s += str(phase.intervalle) + '\n'
@@ -339,6 +345,6 @@ class Carrefour:
         return s
     
     def fileStrActuelle(self):
-        return str(self.phaseActuelle.numero) + ' ' + str(self.tempsPhase) + '\n'
+        return str(self.phaseActuelle.numero) + ' ' + str(self.tempsEcoule) + '\n'
         
     

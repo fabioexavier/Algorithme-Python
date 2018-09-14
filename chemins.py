@@ -12,11 +12,11 @@ class Chemin:
         
             if carrefour.phaseActuelle.type == 'phase':
                 origine = carrefour.phaseActuelle
-                self.sommeMin = max( (origine.dureeMinimale - carrefour.tempsPhase, 0) )
+                self.sommeMin = max( (origine.dureeMinimale - carrefour.tempsEcoule, 0) )
                 
             elif carrefour.phaseActuelle.type == 'interphase':
                 origine = carrefour.phaseActuelle.phaseDestination
-                self.sommeMin = carrefour.phaseActuelle.duree - carrefour.tempsPhase + origine.dureeMinimale
+                self.sommeMin = carrefour.phaseActuelle.duree - carrefour.tempsEcoule + origine.dureeMinimale
             
             self.phases = [origine]
             
@@ -192,6 +192,16 @@ def finDeBranche(graphe, chemin):
 
     # Calcule plus grand delai d'approche
     maxDelai = max([demande.delaiApproche for demande in chemin.carrefour.demandesPriorite])
-
-    return (chemin.sommeMin >= maxDelai) and (len(chemin) >= len(graphe.sommets)+1 )
+    
+    
+    phasesCompatibles = []
+    phasesSpecifiques = []
+    for sommet in graphe.sommets:
+        if sommet.specifique:
+            if not any(phase.lignesActives == sommet.lignesActives for phase in phasesSpecifiques):
+                phasesSpecifiques.append(sommet)
+        else:
+            phasesCompatibles.append(sommet)
+    
+    return (chemin.sommeMin >= maxDelai) and (len(chemin) >= len(phasesCompatibles)+len(phasesSpecifiques) )
 
